@@ -41,6 +41,10 @@ export const maintenanceService = {
     return mockStore.updateTaskStatus(taskId, 'DEFERRED', 'DEMO_USER', 'PLANNING_OFFICER', reason);
   },
 
+  async updateTaskStatus(taskId: string, status: TaskStatus, reason?: string): Promise<boolean> {
+    return mockStore.updateTaskStatus(taskId, status, 'DEMO_USER', 'PLANNING_OFFICER', reason);
+  },
+
   async getAssets() {
     return mockRepository.getAssets();
   },

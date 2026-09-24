@@ -198,4 +198,13 @@ export const mockStore = {
     });
     return true;
   },
+
+  resetStore(): void {
+    _blockRequests = [...mockBlockRequests.map((r) => ({ ...r }))];
+    _integratedBlocks = [...mockIntegratedBlocks.map((b) => ({ ...b }))];
+    _conflicts = [...mockConflicts.map((c) => ({ ...c }))];
+    _recommendations = [...mockAIRecommendations.map((r) => ({ ...r }))];
+    _tasks = [...mockMaintenanceTasks.map((t) => ({ ...t }))];
+    _auditLog = [...mockAuditEvents.map((e) => ({ ...e }))];
+  },
 };
