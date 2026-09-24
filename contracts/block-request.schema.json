@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BlockRequest",
+  "description": "Canonical schema for maintenance corridor traffic block requests.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "requestCode": { "type": "string" },
+    "department": {
+      "type": "string",
+      "enum": ["ENGINEERING", "SIGNAL_TELECOMMUNICATION", "TRACTION"]
+    },
+    "corridorId": { "type": "string", "format": "uuid" },
+    "assetIds": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "requestedStartTime": { "type": "string", "format": "date-time" },
+    "requestedEndTime": { "type": "string", "format": "date-time" },
+    "minDurationMinutes": { "type": "integer", "minimum": 1 },
+    "flexible": { "type": "boolean" },
+    "status": {
+      "type": "string",
+      "enum": ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "EXECUTED", "CANCELLED"]
+    },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["TMS", "SMMS", "TDMS", "BDMS", "COA", "GOODS_FORECAST"]
+    },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "requestCode", "department", "corridorId", "requestedStartTime", "requestedEndTime", "minDurationMinutes", "status", "sourceSystem", "sourceRecordId"]
+}

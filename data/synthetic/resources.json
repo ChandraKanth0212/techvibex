@@ -1,0 +1,47 @@
+[
+  {
+    "id": "r0000000-0000-0000-0000-000000000701",
+    "resourceCode": "RSC-CRN-RC01",
+    "name": "140T Heavy Hydraulic Rail Crane RC-01",
+    "resourceType": "HEAVY_MACHINERY",
+    "department": "ENGINEERING",
+    "location": "Aligarh Maintenance Depot",
+    "status": "RESERVED",
+    "totalQuantity": 1,
+    "availableQuantity": 0,
+    "sourceSystem": "BDMS",
+    "sourceRecordId": "BDMS-RSC-140",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "r0000000-0000-0000-0000-000000000702",
+    "resourceCode": "RSC-TWR-TW04",
+    "name": "Self-Propelled OHE Tower Wagon TW-04",
+    "resourceType": "TOWER_WAGON",
+    "department": "TRACTION",
+    "location": "Tundla TRD Depot",
+    "status": "AVAILABLE",
+    "totalQuantity": 2,
+    "availableQuantity": 1,
+    "sourceSystem": "TDMS",
+    "sourceRecordId": "TDMS-RSC-004",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "r0000000-0000-0000-0000-000000000703",
+    "resourceCode": "RSC-SIG-VAN02",
+    "name": "S&T Mobile Testing Van Van-02",
+    "resourceType": "INSPECTION_CAR",
+    "department": "SIGNAL_TELECOMMUNICATION",
+    "location": "Kanpur Central Yard",
+    "status": "AVAILABLE",
+    "totalQuantity": 1,
+    "availableQuantity": 1,
+    "sourceSystem": "SMMS",
+    "sourceRecordId": "SMMS-RSC-002",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  }
+]

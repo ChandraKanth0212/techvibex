@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Corridor",
+  "description": "Canonical schema for railway corridors/sections.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "corridorCode": { "type": "string" },
+    "name": { "type": "string" },
+    "startStation": { "type": "string" },
+    "endStation": { "type": "string" },
+    "totalLengthKm": { "type": "number", "minimum": 0 },
+    "tracksCount": { "type": "integer", "minimum": 1 },
+    "electrified": { "type": "boolean" },
+    "status": {
+      "type": "string",
+      "enum": ["OPERATIONAL", "PARTIAL_BLOCK", "FULL_BLOCK", "MAINTENANCE_WINDOW"]
+    },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["TMS", "SMMS", "TDMS", "BDMS", "COA", "GOODS_FORECAST"]
+    },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "corridorCode", "name", "startStation", "endStation", "totalLengthKm", "tracksCount", "status", "sourceSystem", "sourceRecordId"]
+}

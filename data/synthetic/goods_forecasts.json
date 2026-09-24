@@ -1,0 +1,34 @@
+[
+  {
+    "id": "gf000000-0000-0000-0000-000000000601",
+    "forecastCode": "GFC-COAL-DEL-01",
+    "originHub": "Dadri Freight Container Terminal",
+    "destinationHub": "Kanpur Power Plant Siding",
+    "corridorId": "c0000000-0000-0000-0000-000000000001",
+    "estimatedDeparture": "2026-09-25T03:00:00Z",
+    "estimatedArrival": "2026-09-25T09:00:00Z",
+    "cargoType": "Thermal Coal Rake",
+    "priority": 5,
+    "status": "FORECASTED",
+    "sourceSystem": "GOODS_FORECAST",
+    "sourceRecordId": "GFC-9001",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "gf000000-0000-0000-0000-000000000602",
+    "forecastCode": "GFC-STEL-HWH-02",
+    "originHub": "Tatanagar Steel Yard",
+    "destinationHub": "Dankuni Goods Complex",
+    "corridorId": "c0000000-0000-0000-0000-000000000002",
+    "estimatedDeparture": "2026-09-25T04:00:00Z",
+    "estimatedArrival": "2026-09-25T08:30:00Z",
+    "cargoType": "Steel Coils",
+    "priority": 6,
+    "status": "CONFIRMED",
+    "sourceSystem": "GOODS_FORECAST",
+    "sourceRecordId": "GFC-9002",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  }
+]

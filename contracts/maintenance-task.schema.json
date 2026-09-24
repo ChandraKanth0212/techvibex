@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MaintenanceTask",
+  "description": "Canonical schema for railway maintenance tasks.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "taskCode": { "type": "string" },
+    "department": {
+      "type": "string",
+      "enum": ["ENGINEERING", "SIGNAL_TELECOMMUNICATION", "TRACTION"]
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "assetId": { "type": ["string", "null"], "format": "uuid" },
+    "corridorId": { "type": "string", "format": "uuid" },
+    "status": {
+      "type": "string",
+      "enum": ["PLANNED", "REQUESTED", "APPROVED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "OVERDUE"]
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+    },
+    "estimatedDurationMinutes": { "type": "integer", "minimum": 1 },
+    "startTimeWindow": { "type": "string", "format": "date-time" },
+    "endTimeWindow": { "type": "string", "format": "date-time" },
+    "requiredResources": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["TMS", "SMMS", "TDMS", "BDMS", "COA", "GOODS_FORECAST"]
+    },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "taskCode", "department", "title", "corridorId", "status", "priority", "estimatedDurationMinutes", "sourceSystem", "sourceRecordId"]
+}

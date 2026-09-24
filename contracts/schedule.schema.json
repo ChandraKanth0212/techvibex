@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Schedule",
+  "description": "Canonical schema for combined integrated maintenance block schedule.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "scheduleCode": { "type": "string" },
+    "corridorId": { "type": "string", "format": "uuid" },
+    "startTime": { "type": "string", "format": "date-time" },
+    "endTime": { "type": "string", "format": "date-time" },
+    "integratedTasks": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["DRAFT", "PROPOSED", "APPROVED", "EXECUTED", "CANCELLED"]
+    },
+    "sourceSystem": { "type": "string" },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "scheduleCode", "corridorId", "startTime", "endTime", "status"]
+}

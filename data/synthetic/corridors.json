@@ -1,0 +1,62 @@
+[
+  {
+    "id": "c0000000-0000-0000-0000-000000000001",
+    "corridorCode": "CORR-DEL-KNP",
+    "name": "Delhi - Kanpur Central Main Trunk Line",
+    "startStation": "NDLS",
+    "endStation": "CNB",
+    "totalLengthKm": 440.5,
+    "tracksCount": 2,
+    "electrified": true,
+    "status": "OPERATIONAL",
+    "sourceSystem": "COA",
+    "sourceRecordId": "COA-CORR-101",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000002",
+    "corridorCode": "CORR-HWH-DHN",
+    "name": "Howrah - Dhanbad Grand Chord Line",
+    "startStation": "HWH",
+    "endStation": "DHN",
+    "totalLengthKm": 271.2,
+    "tracksCount": 2,
+    "electrified": true,
+    "status": "OPERATIONAL",
+    "sourceSystem": "COA",
+    "sourceRecordId": "COA-CORR-102",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000003",
+    "corridorCode": "CORR-BPL-NGP",
+    "name": "Bhopal - Nagpur Central Corridor",
+    "startStation": "BPL",
+    "endStation": "NGP",
+    "totalLengthKm": 390.0,
+    "tracksCount": 2,
+    "electrified": true,
+    "status": "OPERATIONAL",
+    "sourceSystem": "COA",
+    "sourceRecordId": "COA-CORR-103",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000004",
+    "corridorCode": "CORR-LKO-GD-S",
+    "name": "Lucknow - Gonda Regional Non-Electrified Spur",
+    "startStation": "LKO",
+    "endStation": "GD",
+    "totalLengthKm": 125.0,
+    "tracksCount": 1,
+    "electrified": false,
+    "status": "OPERATIONAL",
+    "sourceSystem": "COA",
+    "sourceRecordId": "COA-CORR-104",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  }
+]

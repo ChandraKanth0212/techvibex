@@ -1,0 +1,50 @@
+[
+  {
+    "id": "d0000000-0000-0000-0000-000000000301",
+    "defectCode": "DEF-TRK-HWH-001",
+    "assetId": "a0000000-0000-0000-0000-000000000104",
+    "department": "ENGINEERING",
+    "severity": "CRITICAL",
+    "title": "Hairline Rail Crack Detected by USFD Machine",
+    "description": "Ultrasonic Flaw Detection scan identified 4mm fatigue crack at fishplate rail joint J-90.",
+    "status": "OPEN",
+    "reportedAt": "2026-09-22T10:30:00Z",
+    "resolvedAt": null,
+    "sourceSystem": "SMMS",
+    "sourceRecordId": "SMMS-DEF-9001",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "d0000000-0000-0000-0000-000000000302",
+    "defectCode": "DEF-SIG-DEL-002",
+    "assetId": "a0000000-0000-0000-0000-000000000102",
+    "department": "SIGNAL_TELECOMMUNICATION",
+    "severity": "MAJOR",
+    "title": "Intermittent LED Aspect Signal Flickering",
+    "description": "Signal S-42 red aspect showing voltage fluctuation under high temperature.",
+    "status": "SCHEDULED_FOR_REPAIR",
+    "reportedAt": "2026-09-23T14:15:00Z",
+    "resolvedAt": null,
+    "sourceSystem": "SMMS",
+    "sourceRecordId": "SMMS-DEF-9002",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "d0000000-0000-0000-0000-000000000303",
+    "defectCode": "DEF-TRC-DEL-003",
+    "assetId": "a0000000-0000-0000-0000-000000000103",
+    "department": "TRACTION",
+    "severity": "MINOR",
+    "title": "Minor Carbon Flashover Mark on OHE Porcelain Insulator",
+    "description": "Surface soot accumulation on cantilever insulator requiring cleaning.",
+    "status": "INVESTIGATING",
+    "reportedAt": "2026-09-23T18:00:00Z",
+    "resolvedAt": null,
+    "sourceSystem": "TDMS",
+    "sourceRecordId": "TDMS-DEF-9003",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AIRecommendation",
+  "description": "Canonical schema for downstream AI recommendation objects consumed by Command Center.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "conflictId": { "type": "string", "format": "uuid" },
+    "recommendationType": {
+      "type": "string",
+      "enum": ["INTEGRATE_BLOCKS", "RESCHEDULE_TRAIN", "REROUTE_GOODS", "RESOURCE_REALLOCATION", "WINDOW_EXTENSIONS"]
+    },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "summary": { "type": "string" },
+    "actionDetails": { "type": "object" },
+    "generatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "conflictId", "recommendationType", "score", "summary", "generatedAt"]
+}

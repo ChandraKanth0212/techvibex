@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Asset",
+  "description": "Canonical schema for railway physical infrastructure assets.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "assetCode": { "type": "string" },
+    "name": { "type": "string" },
+    "assetType": {
+      "type": "string",
+      "enum": ["TRACK", "SIGNAL", "SWITCH", "OHE", "SUBSTATION", "BRIDGE", "CROSSING"]
+    },
+    "location": { "type": "string" },
+    "lineSection": { "type": "string" },
+    "latitude": { "type": ["number", "null"] },
+    "longitude": { "type": ["number", "null"] },
+    "status": {
+      "type": "string",
+      "enum": ["OPERATIONAL", "MAINTENANCE_REQUIRED", "UNDER_MAINTENANCE", "DEFECTIVE", "DECOMMISSIONED"]
+    },
+    "department": {
+      "type": "string",
+      "enum": ["ENGINEERING", "SIGNAL_TELECOMMUNICATION", "TRACTION"]
+    },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["TMS", "SMMS", "TDMS", "BDMS", "COA", "GOODS_FORECAST"]
+    },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "assetCode", "name", "assetType", "location", "status", "department", "sourceSystem", "sourceRecordId"]
+}

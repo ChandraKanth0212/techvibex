@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tr000000-0000-0000-0000-000000000501",
+    "trainNumber": "22436",
+    "trainName": "Vande Bharat Express",
+    "trainType": "VANDE_BHARAT",
+    "priority": 1,
+    "origin": "NDLS",
+    "destination": "BSB",
+    "scheduledDeparture": "2026-09-25T06:00:00Z",
+    "scheduledArrival": "2026-09-25T14:00:00Z",
+    "status": "ON_TIME",
+    "sourceSystem": "TMS",
+    "sourceRecordId": "TMS-TRN-22436",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "tr000000-0000-0000-0000-000000000502",
+    "trainNumber": "12302",
+    "trainName": "Howrah Rajdhani Express",
+    "trainType": "RAJDHANI",
+    "priority": 2,
+    "origin": "NDLS",
+    "destination": "HWH",
+    "scheduledDeparture": "2026-09-25T03:15:00Z",
+    "scheduledArrival": "2026-09-25T17:30:00Z",
+    "status": "DELAYED",
+    "sourceSystem": "COA",
+    "sourceRecordId": "COA-TRN-12302",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  },
+  {
+    "id": "tr000000-0000-0000-0000-000000000503",
+    "trainNumber": "12801",
+    "trainName": "Purushottam Express",
+    "trainType": "EXPRESS",
+    "priority": 4,
+    "origin": "PURI",
+    "destination": "NDLS",
+    "scheduledDeparture": "2026-09-25T01:30:00Z",
+    "scheduledArrival": "2026-09-25T12:00:00Z",
+    "status": "ON_TIME",
+    "sourceSystem": "TMS",
+    "sourceRecordId": "TMS-TRN-12801",
+    "ingestedAt": "2026-09-24T00:00:00Z",
+    "updatedAt": "2026-09-24T00:00:00Z"
+  }
+]

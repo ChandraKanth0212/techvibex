@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Train",
+  "description": "Canonical schema for passenger and freight train operations.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "trainNumber": { "type": "string" },
+    "trainName": { "type": "string" },
+    "trainType": {
+      "type": "string",
+      "enum": ["VANDE_BHARAT", "RAJDHANI", "EXPRESS", "PASSENGER", "FREIGHT", "SPECIAL"]
+    },
+    "priority": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "origin": { "type": "string" },
+    "destination": { "type": "string" },
+    "scheduledDeparture": { "type": "string", "format": "date-time" },
+    "scheduledArrival": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["ON_TIME", "DELAYED", "RECHEDULED", "CANCELLED", "DIVERTED"]
+    },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["TMS", "SMMS", "TDMS", "BDMS", "COA", "GOODS_FORECAST"]
+    },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "trainNumber", "trainName", "trainType", "priority", "origin", "destination", "scheduledDeparture", "scheduledArrival", "status", "sourceSystem", "sourceRecordId"]
+}

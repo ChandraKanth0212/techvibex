@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Conflict",
+  "description": "Canonical schema for operational and maintenance schedule conflicts.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "conflictCode": { "type": "string" },
+    "conflictType": {
+      "type": "string",
+      "enum": ["PASSENGER_TRAIN_CONFLICT", "GOODS_FORECAST_CONFLICT", "CRITICAL_OVERDUE_MAINTENANCE", "INCOMPATIBLE_CORRIDORS", "INSUFFICIENT_WINDOW", "RESOURCE_CONFLICT"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+    },
+    "description": { "type": "string" },
+    "corridorId": { "type": ["string", "null"], "format": "uuid" },
+    "involvedTaskIds": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "involvedTrainIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "detectedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "conflictCode", "conflictType", "severity", "description", "detectedAt"]
+}

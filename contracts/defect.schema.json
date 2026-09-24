@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Defect",
+  "description": "Canonical schema for railway defects reported across systems.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "defectCode": { "type": "string" },
+    "assetId": { "type": "string", "format": "uuid" },
+    "department": {
+      "type": "string",
+      "enum": ["ENGINEERING", "SIGNAL_TELECOMMUNICATION", "TRACTION"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["CRITICAL", "MAJOR", "MINOR"]
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["OPEN", "INVESTIGATING", "SCHEDULED_FOR_REPAIR", "RESOLVED", "CLOSED"]
+    },
+    "reportedAt": { "type": "string", "format": "date-time" },
+    "resolvedAt": { "type": ["string", "null"], "format": "date-time" },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["TMS", "SMMS", "TDMS", "BDMS", "COA", "GOODS_FORECAST"]
+    },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "defectCode", "assetId", "department", "severity", "title", "status", "sourceSystem", "sourceRecordId"]
+}

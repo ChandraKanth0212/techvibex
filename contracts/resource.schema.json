@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Resource",
+  "description": "Canonical schema for railway maintenance machinery, equipment, and crew resources.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "resourceCode": { "type": "string" },
+    "name": { "type": "string" },
+    "resourceType": {
+      "type": "string",
+      "enum": ["HEAVY_MACHINERY", "TOWER_WAGON", "CREW_GANG", "INSPECTION_CAR", "MATERIAL_RAKE", "SPECIAL_TOOL"]
+    },
+    "department": {
+      "type": "string",
+      "enum": ["ENGINEERING", "SIGNAL_TELECOMMUNICATION", "TRACTION"]
+    },
+    "location": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["AVAILABLE", "DEPLOYED", "UNDER_REPAIR", "RESERVED"]
+    },
+    "totalQuantity": { "type": "integer", "minimum": 1 },
+    "availableQuantity": { "type": "integer", "minimum": 0 },
+    "sourceSystem": {
+      "type": "string",
+      "enum": ["TMS", "SMMS", "TDMS", "BDMS", "COA", "GOODS_FORECAST"]
+    },
+    "sourceRecordId": { "type": "string" },
+    "ingestedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "resourceCode", "name", "resourceType", "department", "location", "status", "totalQuantity", "availableQuantity", "sourceSystem", "sourceRecordId"]
+}
