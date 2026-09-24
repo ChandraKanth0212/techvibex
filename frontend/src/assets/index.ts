@@ -1,0 +1,2 @@
+// Assets barrel export
+export {};
