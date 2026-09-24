@@ -1,0 +1,50 @@
+version: "2026.1"
+
+# Scoring factor weightings (Must sum to 1.0)
+weights:
+  criticality: 0.20
+  safety_impact: 0.20
+  defect_severity: 0.15
+  urgency: 0.15
+  failure_risk: 0.15
+  train_exposure: 0.08
+  operational_impact: 0.07
+
+# Asset Type Criticality Boosts (0-100 scale)
+asset_type_boosts:
+  RAIL_FRACTURE: 95.0
+  POINT_SWITCH: 90.0
+  OHE_CATENARY: 85.0
+  SIGNAL_INTERLOCKING: 88.0
+  BRIDGE_EXPANSION: 92.0
+  TRACK_GEOMETRY: 75.0
+
+# Priority Level thresholds (0-100 scale)
+thresholds:
+  priority_level:
+    critical: 85.0
+    high: 65.0
+    medium: 40.0
+
+  risk_level:
+    extreme: 80.0
+    high: 60.0
+    moderate: 35.0
+
+  reason_codes:
+    criticality: 75.0
+    safety: 70.0
+    defect: 80.0
+    failure: 70.0
+    exposure: 75.0
+    operational: 75.0
+
+# Overdue maintenance scaling
+overdue:
+  max_multiplier: 2.5
+  scaling_days: 14.0
+
+# Integration Candidate thresholds
+candidate_matching:
+  max_time_gap_minutes: 60
+  same_section_required: true
