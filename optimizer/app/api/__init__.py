@@ -1,0 +1,1 @@
+"""API routers (health + /api/optimizer pipeline endpoints)."""

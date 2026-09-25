@@ -1,0 +1,1 @@
+"""Independent schedule re-validation logic (Phase 2)."""
