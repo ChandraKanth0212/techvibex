@@ -1,5 +1,13 @@
 from .errors import AdapterError, AdapterErrorCode
-from .mappings import AdaptedEntity
+from .mappings import AdaptedEntity, AI_PRIORITY_MAPPING
+from .ai_priority_adapter import (
+    AIPriorityAdapter,
+    AIRecommendationAdapter,
+    adapt_ai_priority,
+    adapt_ai_priority_with_metadata,
+    adapt_ai_recommendation,
+    adapt_ai_recommendation_with_metadata,
+)
 from .maintenance_task_adapter import (
     MaintenanceTaskAdapter,
     adapt_maintenance_task,
@@ -33,6 +41,13 @@ __all__ = [
     "AdapterError",
     "AdapterErrorCode",
     "AdaptedEntity",
+    "AI_PRIORITY_MAPPING",
+    "AIPriorityAdapter",
+    "AIRecommendationAdapter",
+    "adapt_ai_priority",
+    "adapt_ai_priority_with_metadata",
+    "adapt_ai_recommendation",
+    "adapt_ai_recommendation_with_metadata",
     "MaintenanceTaskAdapter",
     "AssetAdapter",
     "BlockRequestAdapter",

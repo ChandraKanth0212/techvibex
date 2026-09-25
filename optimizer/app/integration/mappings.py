@@ -31,6 +31,14 @@ PRIORITY_MAPPING: dict[str, str | None] = {
     "CRITICAL": None,
 }
 
+AI_PRIORITY_MAPPING: dict[str, str | None] = {
+    "LOW": "LOW",
+    "MEDIUM": "MEDIUM",
+    "HIGH": "HIGH",
+    "CRITICAL": None,
+    "URGENT": None,
+}
+
 ASSET_TYPE_MAPPING: dict[str, str | None] = {
     "TRACK": "TRACK",
     "SIGNAL": None,
