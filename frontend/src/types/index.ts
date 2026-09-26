@@ -31,3 +31,5 @@ export * from './conflict';
 export * from './ai';
 export * from './audit';
 export * from './dashboard';
+// Module 3 (Optimization Engine) transport DTOs + Module 4 optimizer view models.
+export * from './optimizer';
