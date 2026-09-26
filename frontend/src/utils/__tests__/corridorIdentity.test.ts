@@ -310,19 +310,28 @@ describe('sectionId alone does NOT generate corridorId', () => {
     expect(identity.source).toBe('UNAVAILABLE_FROM_MODULE_4');
   });
 
-  it('does not derive a corridorId for any mock entity', () => {
+  it('reads a mock corridorId as explicit, and derives nothing when it is absent', () => {
     const entities: CorridorBearing[] = [
       ...mockMaintenanceTasks,
       ...mockBlockRequests,
       ...mockAssets,
       ...mockTrains,
       ...mockGoodsForecasts,
-      ...mockIntegratedBlocks,
     ];
     for (const entity of entities) {
       const identity = resolveCorridorIdentity(entity, topology);
-      expect(identity.corridorId).toBeNull();
-      expect(identity.source).toBe('UNAVAILABLE_FROM_MODULE_4');
+      expect(identity.corridorId).toBe(entity.corridorId);
+      expect(identity.source).toBe('MAPPED_FROM_MODULE_4');
+      // The section lookup is never consumed as an identity.
+      expect(identity.candidateCorridorId).toBeNull();
+
+      // The decisive check: the same record reduced to a sectionId alone must
+      // still resolve to nothing. Populating corridorId must not have made the
+      // section shortcut unnecessary.
+      const sectionOnly: CorridorBearing = { sectionId: entity.sectionId };
+      const without = resolveCorridorIdentity(sectionOnly, topology);
+      expect(without.corridorId).toBeNull();
+      expect(without.source).toBe('UNAVAILABLE_FROM_MODULE_4');
     }
   });
 
@@ -405,13 +414,22 @@ describe('existing mocks remain valid and unaltered', () => {
     expect(mockCorridors).toHaveLength(5);
   });
 
-  it('invents no corridorId: no mock record carries one', () => {
+  it('carries an explicit catalogue-referenced corridorId, and invents none', () => {
+    const knownCorridorIds = new Set(mockCorridors.map((c) => c.corridorId));
+
     for (const [name, rows] of datasets) {
       for (const row of rows) {
+        if (name === 'integratedBlocks') {
+          // Integrated blocks are planning proposals, not ground truth, and
+          // deliberately stay without a corridor identity.
+          expect(row.corridorId).toBeUndefined();
+          continue;
+        }
+        expect(row.corridorId, `${name} must carry an explicit corridorId`).toBeTruthy();
         expect(
-          row.corridorId,
-          `${name} record must not carry an invented corridorId`,
-        ).toBeUndefined();
+          knownCorridorIds.has(row.corridorId as string),
+          `${name} corridorId must exist in the corridor catalogue`,
+        ).toBe(true);
       }
     }
   });

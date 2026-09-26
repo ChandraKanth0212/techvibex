@@ -55,6 +55,28 @@ function inputOf(
   return found;
 }
 
+/**
+ * Phase 9B-6 populated `module3WorkType` and `dueBy` on every task and the
+ * window/volume fields on every forecast. The "never derived" guards below are
+ * about the absence of a derivation, not about empty fixtures, so they re-base
+ * on records with those fields withheld.
+ */
+const stripTaskFields = <T extends { module3WorkType?: unknown; dueBy?: unknown }>(
+  rows: readonly T[],
+): T[] => rows.map((row) => ({ ...row, module3WorkType: undefined, dueBy: undefined }));
+
+const stripForecastFields = <
+  T extends { windowStart?: unknown; windowEnd?: unknown; volumeTonnes?: unknown },
+>(
+  rows: readonly T[],
+): T[] =>
+  rows.map((row) => ({
+    ...row,
+    windowStart: undefined,
+    windowEnd: undefined,
+    volumeTonnes: undefined,
+  }));
+
 function makeInput(
   overrides: Partial<OptimizerReadinessInput> = {},
 ): OptimizerReadinessInput {
@@ -152,7 +174,7 @@ describe('Module 4 data with no corridor selected', () => {
     expect(readiness.scope.corridorId).toBeNull();
   });
 
-  it('reports every entity corridor input as unavailable', () => {
+  it('reports entity corridor identity as explicit data, independent of scope', () => {
     for (const id of [
       'tasks.corridor_id',
       'block_requests.corridor_id',
@@ -161,11 +183,20 @@ describe('Module 4 data with no corridor selected', () => {
       'goods_forecasts.corridor_id',
     ]) {
       const input = inputOf(readiness, id);
-      expect(input.status, id).toBe('UNAVAILABLE');
-      expect(input.coverage?.present, id).toBe(0);
+      // Corridor identity now lives on the records themselves, so it is
+      // available even though no corridor is selected in the planner. Scope
+      // governs the request, never the entities.
+      expect(input.status, id).toBe('AVAILABLE');
+      expect(input.source, id).toBe('MAPPED_FROM_MODULE_4');
+      expect(input.synthetic, id).toBe(false);
+      expect(input.coverage?.present, id).toBe(input.coverage?.total);
       expect(input.coverage?.total, id).toBeGreaterThan(0);
       expect(input.blocking, id).toBe(true);
     }
+
+    // The scope-dependent input is still unavailable, proving the two are not
+    // conflated.
+    expect(inputOf(readiness, 'request.corridor_id').status).toBe('UNAVAILABLE');
   });
 
   it('reports the missing movementId as an unpopulated domain field', () => {
@@ -177,22 +208,42 @@ describe('Module 4 data with no corridor selected', () => {
     expect(input.resolvableByUserAction).toBe(false);
   });
 
-  it('reports the unpopulated goods-forecast window pair', () => {
-    const input = inputOf(readiness, 'goods_forecasts.window');
+  it('reports a goods-forecast window pair only when both ends are explicit', () => {
+    const stripped = assessModule4Readiness({
+      ...snapshotWith(),
+      goodsForecasts: stripForecastFields(mockGoodsForecasts),
+    });
+    const input = inputOf(stripped, 'goods_forecasts.window');
     expect(input.status).toBe('UNAVAILABLE');
     expect(input.reason).toContain('expectedTime');
     expect(input.reason).toContain('window_start');
-    expect(input.coverage).toEqual({
-      present: 0,
+    expect(input.coverage).toEqual({ present: 0, total: mockGoodsForecasts.length });
+
+    // Phase 9B-6 supplied both ends explicitly, so the live fixture is available.
+    const live = inputOf(readiness, 'goods_forecasts.window');
+    expect(live.status).toBe('AVAILABLE');
+    expect(live.coverage).toEqual({
+      present: mockGoodsForecasts.length,
       total: mockGoodsForecasts.length,
     });
   });
 
-  it('reports the unpopulated goods-forecast volume', () => {
-    const input = inputOf(readiness, 'goods_forecasts.volume_tonnes');
+  it('reports a goods-forecast volume only when tonnage is explicit', () => {
+    const stripped = assessModule4Readiness({
+      ...snapshotWith(),
+      goodsForecasts: stripForecastFields(mockGoodsForecasts),
+    });
+    const input = inputOf(stripped, 'goods_forecasts.volume_tonnes');
     expect(input.status).toBe('UNAVAILABLE');
     expect(input.reason).toContain('volumeTonnes is populated on 0/');
     expect(input.reason).toContain('probability');
+
+    // A probability is never a tonnage, so the two must differ in the data too.
+    const live = inputOf(readiness, 'goods_forecasts.volume_tonnes');
+    expect(live.status).toBe('AVAILABLE');
+    for (const forecast of mockGoodsForecasts) {
+      expect(forecast.volumeTonnes as number).toBeGreaterThan(1);
+    }
   });
 
   it('reports the resource enum mismatch as a mapping problem, not data', () => {
@@ -224,7 +275,11 @@ describe('Module 4 data with no corridor selected', () => {
   });
 
   it('keeps requestedDate out of Module 3 due_by', () => {
-    const input = inputOf(readiness, 'tasks.due_by');
+    const stripped = assessModule4Readiness({
+      ...snapshotWith(),
+      tasks: stripTaskFields(mockMaintenanceTasks),
+    });
+    const input = inputOf(stripped, 'tasks.due_by');
     // due_by is no longer permanently UNRESOLVED: an explicit MaintenanceTask.dueBy
     // can now satisfy it. It is still never derived from requestedDate.
     expect(input.status).toBe('UNAVAILABLE');
@@ -232,23 +287,56 @@ describe('Module 4 data with no corridor selected', () => {
     expect(input.reason).toContain('DEADLINE');
     expect(input.reason).toContain('never derived');
     expect(mockMaintenanceTasks.every((t) => Boolean(t.requestedDate))).toBe(true);
-    expect(mockMaintenanceTasks.every((t) => t.dueBy === undefined)).toBe(true);
+
+    // Phase 9B-6: every task carries an explicit deadline, and it is not the
+    // request date under any spelling.
+    const live = inputOf(readiness, 'tasks.due_by');
+    expect(live.status).toBe('AVAILABLE');
+    for (const task of mockMaintenanceTasks) {
+      expect(task.dueBy as string).toBeTruthy();
+      expect(task.dueBy).not.toBe(task.requestedDate);
+      expect((task.dueBy as string).startsWith(task.requestedDate)).toBe(false);
+    }
   });
 
   it('reports work_type as a declared field rather than a free-text coercion', () => {
-    const input = inputOf(readiness, 'tasks.work_type');
+    const stripped = assessModule4Readiness({
+      ...snapshotWith(),
+      tasks: stripTaskFields(mockMaintenanceTasks),
+    });
+    const input = inputOf(stripped, 'tasks.work_type');
     expect(input.status).toBe('UNAVAILABLE');
     expect(input.coverage).toEqual({ present: 0, total: mockMaintenanceTasks.length });
     // Module 3 declares no default for work_type, so this one cannot be waived.
     expect(input.reason).toContain('NO default');
     expect(input.reason).toContain('never coerced');
+
+    // Phase 9B-6: populated with explicit Module 3 vocabulary values, never by
+    // copying or coercing the free text.
+    const live = inputOf(readiness, 'tasks.work_type');
+    expect(live.status).toBe('AVAILABLE');
+    for (const task of mockMaintenanceTasks) {
+      expect(task.workType).toBeTruthy();
+      expect(task.workType).not.toBe(task.module3WorkType);
+    }
   });
 
   it('reports the corridor name as a declared field rather than a station join', () => {
     const input = inputOf(readiness, 'corridors.name');
-    expect(input.status).toBe('UNAVAILABLE');
-    expect(input.coverage).toEqual({ present: 0, total: mockCorridors.length });
+    expect(input.status).toBe('AVAILABLE');
+    expect(input.coverage).toEqual({
+      present: mockCorridors.length,
+      total: mockCorridors.length,
+    });
     expect(input.reason).toContain('never assembled from station names');
+
+    // The names are authored values, not a rendering of the station pair.
+    for (const corridor of mockCorridors) {
+      expect(corridor.name, `${corridor.corridorId} needs a name`).toBeTruthy();
+      expect(corridor.name).not.toBe(`${corridor.fromStation}-${corridor.toStation}`);
+      expect(corridor.name).not.toBe(`${corridor.fromStation} - ${corridor.toStation}`);
+      expect(corridor.name).not.toContain(corridor.corridorId);
+    }
   });
 
   it('reports the unpopulated AI priority task id and score', () => {
@@ -389,12 +477,12 @@ describe('Module 4 data with no corridor selected', () => {
 
 describe('coverage is derived from the data, not asserted', () => {
   it('reports a window pair and volume when a forecast actually carries them', () => {
-    const [first, ...rest] = mockGoodsForecasts;
+    const [first, ...rest] = stripForecastFields(mockGoodsForecasts);
     const enriched = [
       {
         ...first,
-        windowStart: '22:00:00',
-        windowEnd: '23:30:00',
+        windowStart: '2026-09-27T22:00:00Z',
+        windowEnd: '2026-09-27T23:30:00Z',
         volumeTonnes: 800,
       },
       ...rest,
@@ -412,12 +500,13 @@ describe('coverage is derived from the data, not asserted', () => {
   });
 
   it('reports a partial window pair that lacks only its end', () => {
-    const [first, ...rest] = mockGoodsForecasts;
+    const [first, ...rest] = stripForecastFields(mockGoodsForecasts);
     const readiness = assessModule4Readiness({
       ...snapshotWith(),
-      goodsForecasts: [{ ...first, windowStart: '22:00:00' }, ...rest],
+      goodsForecasts: [{ ...first, windowStart: '2026-09-27T22:00:00Z' }, ...rest],
     });
     const window = inputOf(readiness, 'goods_forecasts.window');
+    // One end is never enough: Module 3 requires both window_start and window_end.
     expect(window.coverage).toEqual({ present: 0, total: rest.length + 1 });
     expect(window.status).toBe('UNAVAILABLE');
   });
@@ -621,7 +710,11 @@ describe('selecting a corridor scopes the request but assigns no entity', () => 
     expect(readiness.scope.sectionId).toBe(mockCorridors[0].sectionId);
   });
 
-  it('does NOT assign that corridor to any entity', () => {
+  it('does NOT assign the selected corridor to any entity', () => {
+    // Entity corridor identity is data, not scope. Selecting a corridor must
+    // leave every entity input exactly as it was with nothing selected.
+    const unscoped = assessModule4Readiness(snapshotWith());
+
     for (const id of [
       'tasks.corridor_id',
       'block_requests.corridor_id',
@@ -629,10 +722,14 @@ describe('selecting a corridor scopes the request but assigns no entity', () => 
       'trains.corridor_id',
       'goods_forecasts.corridor_id',
     ]) {
-      const input = inputOf(readiness, id);
-      expect(input.status, id).toBe('UNAVAILABLE');
-      expect(input.coverage?.present, id).toBe(0);
+      expect(inputOf(readiness, id).status, id).toBe('AVAILABLE');
+      expect(inputOf(readiness, id).coverage, id).toEqual(inputOf(unscoped, id).coverage);
     }
+
+    // Records outside the selected corridor keep their own identity.
+    const outside = mockMaintenanceTasks.find((t) => t.corridorId !== CORRIDOR_ID);
+    expect(outside, 'expected tasks on other corridors').toBeDefined();
+    expect(outside?.corridorId).not.toBe(CORRIDOR_ID);
   });
 
   it('remains BLOCKED overall', () => {
@@ -649,17 +746,38 @@ describe('selecting a corridor scopes the request but assigns no entity', () => 
 // ── sectionId is never parsed ─────────────────────────────────────────────────
 
 describe('sectionId alone is never mapped to a corridorId', () => {
-  const readiness = assessModule4Readiness(snapshotWith());
+  /**
+   * Phase 9B-5 gave the fixture records an explicit `corridorId`. These
+   * assertions are about the *shortcut*, not about the fixtures, so the
+   * explicit value is deliberately withheld here: every record below carries a
+   * sectionId and nothing else. If any future change started deriving corridor
+   * identity from sections, this is the test that would catch it.
+   */
+  const withoutCorridorId = <T extends { corridorId?: string }>(
+    rows: readonly T[],
+  ): T[] => rows.map((row) => ({ ...row, corridorId: undefined }));
+
+  const readiness = assessModule4Readiness({
+    ...snapshotWith(),
+    tasks: withoutCorridorId(mockMaintenanceTasks),
+    blockRequests: withoutCorridorId(mockBlockRequests),
+    assets: withoutCorridorId(mockAssets),
+    trains: withoutCorridorId(mockTrains),
+    goodsForecasts: withoutCorridorId(mockGoodsForecasts),
+  });
 
   it('derives zero corridor coverage despite every record having a sectionId', () => {
-    const withSections = [
-      ...mockMaintenanceTasks,
-      ...mockBlockRequests,
-      ...mockAssets,
-      ...mockTrains,
-      ...mockGoodsForecasts,
+    const withSectionsOnly = [
+      ...withoutCorridorId(mockMaintenanceTasks),
+      ...withoutCorridorId(mockBlockRequests),
+      ...withoutCorridorId(mockAssets),
+      ...withoutCorridorId(mockTrains),
+      ...withoutCorridorId(mockGoodsForecasts),
     ];
-    expect(withSections.every((r) => Boolean(r.sectionId))).toBe(true);
+    expect(withSectionsOnly.length).toBeGreaterThan(0);
+    expect(withSectionsOnly.every((r) => Boolean(r.sectionId))).toBe(true);
+    expect(withSectionsOnly.every((r) => !r.corridorId)).toBe(true);
+
     for (const id of [
       'tasks.corridor_id',
       'block_requests.corridor_id',
@@ -668,6 +786,22 @@ describe('sectionId alone is never mapped to a corridorId', () => {
       'goods_forecasts.corridor_id',
     ]) {
       expect(inputOf(readiness, id).coverage?.present, id).toBe(0);
+    }
+  });
+
+  it('withholding the explicit corridorId is what makes coverage zero', () => {
+    // The contrast case: the untouched fixtures, which differ from the
+    // snapshot above only by carrying an explicit corridorId.
+    const withExplicit = assessModule4Readiness(snapshotWith());
+    for (const id of [
+      'tasks.corridor_id',
+      'block_requests.corridor_id',
+      'assets.corridor_id',
+      'trains.corridor_id',
+      'goods_forecasts.corridor_id',
+    ]) {
+      expect(inputOf(withExplicit, id).status, id).toBe('AVAILABLE');
+      expect(inputOf(withExplicit, id).coverage?.present, id).toBeGreaterThan(0);
     }
   });
 
@@ -975,7 +1109,12 @@ describe('no Module 4 axis is converted into a Module 3 one', () => {
   });
 
   it('derives no goods window from expectedTime and no tonnage from probability', () => {
-    const readiness = assessModule4Readiness(snapshotWith());
+    // With the explicit fields withheld, a point estimate and a probability are
+    // present on every record and must yield nothing.
+    const readiness = assessModule4Readiness({
+      ...snapshotWith(),
+      goodsForecasts: stripForecastFields(mockGoodsForecasts),
+    });
     expect(mockGoodsForecasts.every((g) => Boolean(g.expectedTime))).toBe(true);
     expect(mockGoodsForecasts.every((g) => typeof g.probability === 'number')).toBe(true);
     expect(inputOf(readiness, 'goods_forecasts.window').coverage).toEqual({

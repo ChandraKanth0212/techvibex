@@ -184,9 +184,13 @@ describe('blocked construction never reaches the network', () => {
     expect(result.readiness.state).toBe('BLOCKED');
     expect(result.blockers.length).toBeGreaterThan(0);
     const ids = result.blockers.map((b) => b.id);
-    expect(ids).toContain('tasks.work_type');
-    expect(ids).toContain('tasks.due_by');
-    expect(ids).toContain('corridors.name');
+    expect(ids).toContain('resources.resource_type');
+    // Phase 9B-5 resolved the corridor identity and name inputs; 9B-6 resolved
+    // the verified task and forecast fields.
+    expect(ids).not.toContain('corridors.name');
+    expect(ids).not.toContain('tasks.corridor_id');
+    expect(ids).not.toContain('tasks.work_type');
+    expect(ids).not.toContain('goods_forecasts.window');
     for (const blocker of result.blockers) {
       expect(blocker.reason.length).toBeGreaterThan(0);
       expect(blocker.field.length).toBeGreaterThan(0);
@@ -206,8 +210,22 @@ describe('blocked construction never reaches the network', () => {
     const result = await optimizerService.generatePlanFromModule4(blockedSnapshot());
     if (result.kind !== 'BLOCKED') throw new Error('expected BLOCKED');
     const byId = new Map(result.blockers.map((b) => [b.id, b]));
-    expect(byId.get('tasks.work_type')?.resolvableByUserAction).toBe(true);
-    expect(byId.get('tasks.due_by')?.resolvableByUserAction).toBe(true);
+    // The remaining actionable blocker is the block grant type: an operator can
+    // record an explicit occupancyType on a request.
+    expect(byId.get('request.occupancy_type')?.resolvableByUserAction).toBe(true);
+    // The rest are not a data-entry action.
+    expect(byId.get('tasks.priority')?.resolvableByUserAction).toBe(true);
+    expect(byId.get('resources.resource_type')?.resolvableByUserAction).toBe(false);
+    expect(byId.get('trains.movement_id')?.resolvableByUserAction).toBe(false);
+    // The 9B-6 inputs are resolved and must no longer appear at all.
+    for (const gone of [
+      'tasks.work_type',
+      'tasks.due_by',
+      'goods_forecasts.window',
+      'goods_forecasts.volume_tonnes',
+    ]) {
+      expect(byId.has(gone), `${gone} should be resolved`).toBe(false);
+    }
   });
 
   it('does not throw, and does not fake an empty plan', async () => {

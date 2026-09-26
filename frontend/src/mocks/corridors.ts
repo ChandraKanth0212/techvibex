@@ -10,6 +10,7 @@ import { Corridor } from '../types/corridor';
 export const mockCorridors: Corridor[] = [
   {
     corridorId: 'CORR-001',
+    name: 'Secunderabad-Kacheguda Suburban Main Line',
     sectionId: 'SEC-SCD-KCG',
     fromStation: 'SECUNDERABAD',
     toStation: 'KACHEGUDA',
@@ -49,6 +50,7 @@ export const mockCorridors: Corridor[] = [
   },
   {
     corridorId: 'CORR-002',
+    name: 'Lingampalli-Mahbubnagar Down Freight Line',
     sectionId: 'SEC-LPI-MBNR',
     fromStation: 'LINGAMPALLI',
     toStation: 'MAHBUBNAGAR',
@@ -81,6 +83,7 @@ export const mockCorridors: Corridor[] = [
   },
   {
     corridorId: 'CORR-003',
+    name: 'Begumpet-Falaknuma Single Line',
     sectionId: 'SEC-BMT-FM',
     fromStation: 'BEGUMPET',
     toStation: 'FALAKNUMA',
@@ -111,6 +114,7 @@ export const mockCorridors: Corridor[] = [
   },
   {
     corridorId: 'CORR-004',
+    name: 'Kacheguda-DR Junction Coal Freight Corridor',
     sectionId: 'SEC-KCG-DR',
     fromStation: 'KACHEGUDA',
     toStation: 'DR-JUNCTION',
@@ -143,6 +147,7 @@ export const mockCorridors: Corridor[] = [
   },
   {
     corridorId: 'CORR-005',
+    name: 'Lingampalli-Hyderabad Deccan MMTS Section',
     sectionId: 'SEC-LPI-HYB',
     fromStation: 'LINGAMPALLI',
     toStation: 'HYDERABAD_DECCAN',

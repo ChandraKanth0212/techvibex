@@ -113,9 +113,16 @@ describe('the builder refuses rather than approximating', () => {
     const result = buildOptimizeRequest(blockedSnapshot());
     if (result.ok) throw new Error('expected a refusal');
     const ids = result.blockers.map((b) => b.id);
-    expect(ids).toContain('tasks.work_type');
-    expect(ids).toContain('tasks.due_by');
-    expect(ids).toContain('corridors.name');
+    expect(ids).toContain('resources.resource_type');
+    // Phase 9B-5 supplied explicit corridor identity and corridor names.
+    expect(ids).not.toContain('corridors.name');
+    expect(ids).not.toContain('tasks.corridor_id');
+    expect(ids).not.toContain('goods_forecasts.corridor_id');
+    // Phase 9B-6 supplied the verified task and forecast fields.
+    expect(ids).not.toContain('tasks.work_type');
+    expect(ids).not.toContain('tasks.due_by');
+    expect(ids).not.toContain('goods_forecasts.window');
+    expect(ids).not.toContain('goods_forecasts.volume_tonnes');
     // A task and corridor ARE selected here, so task_ids is correctly satisfied.
     expect(ids).not.toContain('request.task_ids');
   });
