@@ -24,6 +24,7 @@ export * from './defect';
 export * from './maintenance';
 export * from './block';
 export * from './corridor';
+export * from './occupancy';
 export * from './train';
 export * from './resource';
 export * from './schedule';
@@ -31,5 +32,7 @@ export * from './conflict';
 export * from './ai';
 export * from './audit';
 export * from './dashboard';
+// Corridor identity provenance (Phase 9B-2A)
+export * from './corridorIdentity';
 // Module 3 (Optimization Engine) transport DTOs + Module 4 optimizer view models.
 export * from './optimizer';

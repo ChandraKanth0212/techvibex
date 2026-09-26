@@ -4,33 +4,130 @@ import {
   AlertTriangle,
   Clock,
   TrainTrack,
+  Route,
   X,
 } from 'lucide-react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { DepartmentBadge } from '@/components/common/DepartmentBadge';
 import { LoadingState } from '@/components/common/LoadingState';
+import { OptimizerReadinessPanel } from '@/components/optimizer';
 import {
   useMaintenanceTasks,
   useIntegratedBlocks,
   useTrainSchedule,
   useConflicts,
+  useCorridors,
+  usePlannerScope,
+  useBlockRequests,
+  useGoodsForecasts,
+  useAIRecommendations,
 } from '@/hooks';
 import type { Department } from '@/types/asset';
+import type { MaintenanceTask } from '@/types/maintenance';
+import type { IntegratedBlock } from '@/types/block';
+import type { Train } from '@/types/train';
+import type { Module4ReadinessSnapshot } from '@/services/optimizerRequestReadiness';
+import type { OptimizerModule4Result } from '@/services/optimizerService';
+import {
+  optimizerService,
+} from '@/services/optimizerService';
+import { buildDiagnosticsView } from '@/services/optimizerReadinessDiagnostics';
+// Assets and resources have no query hooks yet; these are the app's own Module 4
+// records, read directly so the readiness gate sees the same data the services
+// would return. Passing empty arrays here would understate the blockers and
+// could let a real request look READY.
+import { mockAssets, mockResources } from '@/mocks';
 import { formatTime, formatDate, formatDuration } from '@/utils';
+import { buildCorridorTopology, resolveCorridorIdentity, toDetailEntries } from '@/utils';
+import { plannerScopeTaskIds } from '@/utils/plannerScope';
+
+/** Typed planner selection. A discriminated union keeps `corridorId` visible
+ *  on the detail view instead of erasing it into an untyped record. */
+type PlannerSelection =
+  | { type: 'TASK'; title: string; details: MaintenanceTask }
+  | { type: 'BLOCK'; title: string; details: IntegratedBlock }
+  | { type: 'TRAIN'; title: string; details: Train };
 
 export const PlannerPage: React.FC = () => {
-  const [horizon, setHorizon] = useState<'WEEKLY' | 'MONTHLY'>('WEEKLY');
-  const [selectedItem, setSelectedItem] = useState<{
-    title: string;
-    type: 'TASK' | 'BLOCK' | 'TRAIN';
-    details: Record<string, any>;
-  } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<PlannerSelection | null>(null);
+  // Real Module 4 optimizer diagnostic state. No synthetic or mock fallback is
+  // ever taken here: when the real path is blocked the result says so.
+  const [optimizerResult, setOptimizerResult] = useState<OptimizerModule4Result | null>(null);
+  const [optimizerRunning, setOptimizerRunning] = useState(false);
+  const [optimizerError, setOptimizerError] = useState<string | null>(null);
 
   const { data: tasks, isLoading: isTasksLoading } = useMaintenanceTasks();
   const { data: blocks, isLoading: isBlocksLoading } = useIntegratedBlocks();
   const { data: trains } = useTrainSchedule();
   const { data: conflicts } = useConflicts();
+  const { data: corridors } = useCorridors();
+  const { data: blockRequests } = useBlockRequests();
+  const { data: goodsForecasts } = useGoodsForecasts();
+  const { data: recommendations } = useAIRecommendations();
+  const { scope, setHorizon, selectCorridor, identity: scopeIdentity } =
+    usePlannerScope(corridors ?? []);
+
+  const selectedTaskIds = useMemo(() => plannerScopeTaskIds(scope), [scope]);
+
+  /**
+   * The exact snapshot handed to the readiness gate. `occupancies` is empty
+   * because Module 4 ships no possession records yet — that is stated as empty
+   * rather than back-filled from integrated blocks or corridor windows.
+   */
+  const module4Snapshot = useMemo<Module4ReadinessSnapshot>(
+    () => ({
+      tasks: tasks ?? [],
+      blockRequests: blockRequests ?? [],
+      assets: mockAssets,
+      trains: trains ?? [],
+      goodsForecasts: goodsForecasts ?? [],
+      resources: mockResources,
+      corridors: corridors ?? [],
+      integratedBlocks: blocks ?? [],
+      occupancies: [],
+      recommendations: recommendations ?? [],
+      scope,
+    }),
+    [
+      tasks,
+      blockRequests,
+      trains,
+      goodsForecasts,
+      corridors,
+      blocks,
+      recommendations,
+      scope,
+    ],
+  );
+
+  const optimizerEnabled = optimizerService.isEnabled();
+
+  /**
+   * The single real-API entry point. It is only reachable when the typed result
+   * reports a constructable request, and a BLOCKED result short-circuits inside
+   * the service before any client is built.
+   */
+  const runRealOptimizer = async (): Promise<void> => {
+    setOptimizerRunning(true);
+    setOptimizerError(null);
+    try {
+      const result = await optimizerService.generatePlanFromModule4(module4Snapshot);
+      setOptimizerResult(result);
+    } catch (e) {
+      setOptimizerError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOptimizerRunning(false);
+    }
+  };
+
+  const optimizerView = useMemo(
+    () =>
+      optimizerResult
+        ? buildDiagnosticsView(optimizerResult, { optimizerEnabled, selectedTaskIds })
+        : null,
+    [optimizerResult, optimizerEnabled, selectedTaskIds],
+  );
 
   // Find tasks/blocks that have conflicts
   const conflictedTaskIds = useMemo(() => {
@@ -57,6 +154,24 @@ export const PlannerPage: React.FC = () => {
     { key: 'TRACTION', label: 'Traction Lane', sub: 'OHE, Catenary, Isolators' },
   ];
 
+  const corridorTopology = useMemo(
+    () => buildCorridorTopology(corridors ?? []),
+    [corridors],
+  );
+
+  const detailEntries = useMemo<[string, unknown][]>(
+    () => (selectedItem ? toDetailEntries(selectedItem.details) : []),
+    [selectedItem],
+  );
+
+  const selectionIdentity = useMemo(
+    () =>
+      selectedItem
+        ? resolveCorridorIdentity(selectedItem.details, corridorTopology)
+        : null,
+    [selectedItem, corridorTopology],
+  );
+
   const isLoading = isTasksLoading || isBlocksLoading;
 
   return (
@@ -71,7 +186,7 @@ export const PlannerPage: React.FC = () => {
             <button
               onClick={() => setHorizon('WEEKLY')}
               className={`px-3 py-1 rounded transition-colors ${
-                horizon === 'WEEKLY'
+                scope.horizon === 'WEEKLY'
                   ? 'bg-blue-600 text-white font-medium shadow'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
@@ -81,7 +196,7 @@ export const PlannerPage: React.FC = () => {
             <button
               onClick={() => setHorizon('MONTHLY')}
               className={`px-3 py-1 rounded transition-colors ${
-                horizon === 'MONTHLY'
+                scope.horizon === 'MONTHLY'
                   ? 'bg-blue-600 text-white font-medium shadow'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
@@ -93,25 +208,73 @@ export const PlannerPage: React.FC = () => {
       />
 
       {/* Horizon summary banner */}
-      <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs font-mono">
-        <div className="flex items-center gap-2 text-slate-300">
-          <Clock className="w-4 h-4 text-blue-400" />
-          <span>Active Scope: </span>
-          <span className="text-blue-400 font-bold">
-            {horizon === 'WEEKLY' ? '7-Day Rolling Horizon (Execution Phase)' : '14-Day Strategic Planning Horizon'}
-          </span>
+      <div className="space-y-2">
+        <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Clock className="w-4 h-4 text-blue-400" />
+            <span>Active Scope: </span>
+            <span className="text-blue-400 font-bold">
+              {scope.horizon === 'WEEKLY' ? '7-Day Rolling Horizon (Execution Phase)' : '14-Day Strategic Planning Horizon'}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> Integrated Bundles
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Department Tasks
+            </span>
+            <span className="flex items-center gap-1 text-rose-400 font-semibold">
+              <AlertTriangle className="w-3.5 h-3.5" /> Overlap Clashes
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-4 text-slate-400">
-          <span className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> Integrated Bundles
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Department Tasks
-          </span>
-          <span className="flex items-center gap-1 text-rose-400 font-semibold">
-            <AlertTriangle className="w-3.5 h-3.5" /> Overlap Clashes
-          </span>
+
+        {/* Corridor scope: an explicit operator selection, never inferred from section ids. */}
+        <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-4 text-xs font-mono">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Route className="w-4 h-4 text-emerald-400" />
+            <span>Corridor Scope:</span>
+            {scopeIdentity.corridorId ? (
+              <span className="text-emerald-400 font-bold">
+                {scopeIdentity.corridorId}
+                {scopeIdentity.sectionId ? ` (${scopeIdentity.sectionId})` : ''}
+              </span>
+            ) : (
+              <span className="text-amber-400 font-bold">UNAVAILABLE_FROM_MODULE_4</span>
+            )}
+            <span className="text-[10px] text-slate-500">{scopeIdentity.source}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="planner-corridor-scope" className="text-[10px] text-slate-500 uppercase tracking-wide">
+              Select corridor
+            </label>
+            <select
+              id="planner-corridor-scope"
+              value={scope.selectedCorridorId ?? ''}
+              onChange={(e) => selectCorridor(e.target.value === '' ? null : e.target.value)}
+              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
+            >
+              <option value="">-- none --</option>
+              {(corridors ?? []).map((c) => (
+                <option key={c.corridorId} value={c.corridorId}>
+                  {c.corridorId} | {c.sectionId} | {c.fromStation}-{c.toStation}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {/* Real Module 4 optimizer readiness diagnostic. Never falls back to
+            synthetic or mock data: a blocked gate simply reports blocked. */}
+        <OptimizerReadinessPanel
+          view={optimizerView}
+          optimizerEnabled={optimizerEnabled}
+          isRunning={optimizerRunning}
+          onRun={runRealOptimizer}
+          error={optimizerError}
+        />
       </div>
 
       {isLoading ? (
@@ -307,15 +470,43 @@ export const PlannerPage: React.FC = () => {
             </div>
 
             <div className="space-y-2 text-xs font-mono">
-              {Object.entries(selectedItem.details)
-                .filter(([k]) => typeof selectedItem.details[k] !== 'object')
-                .map(([k, v]) => (
-                  <div key={k} className="flex justify-between p-2 rounded bg-slate-950/60 border border-slate-800">
-                    <span className="text-slate-400">{k}:</span>
-                    <span className="text-slate-200 font-medium">{String(v)}</span>
-                  </div>
-                ))}
+              {detailEntries.map(([k, v]) => (
+                <div key={k} className="flex justify-between p-2 rounded bg-slate-950/60 border border-slate-800">
+                  <span className="text-slate-400">{k}:</span>
+                  <span className="text-slate-200 font-medium">{String(v)}</span>
+                </div>
+              ))}
             </div>
+
+            {selectionIdentity && (
+              <div className="p-2 rounded bg-slate-950/80 border border-slate-800 text-[10px] font-mono space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">corridorId (Module 3 required)</span>
+                  <span
+                    className={
+                      selectionIdentity.corridorId
+                        ? 'text-emerald-400 font-bold'
+                        : 'text-amber-400 font-bold'
+                    }
+                  >
+                    {selectionIdentity.corridorId ?? 'null'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">source</span>
+                  <span className="text-slate-300">{selectionIdentity.source}</span>
+                </div>
+                {selectionIdentity.candidateCorridorId && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">section owner (advisory only)</span>
+                    <span className="text-slate-400">{selectionIdentity.candidateCorridorId}</span>
+                  </div>
+                )}
+                <p className="text-slate-500 leading-relaxed pt-1 border-t border-slate-800">
+                  {selectionIdentity.reason}
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end pt-2">
               <button

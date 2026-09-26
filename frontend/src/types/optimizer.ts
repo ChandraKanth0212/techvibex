@@ -326,6 +326,79 @@ export interface ValidateRequestDTO {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Module 3 contract vocabularies
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Module 3's own enumerations, transcribed from the frozen optimizer contracts
+// (`optimizer/contracts/enums.py`, `existing_block.py`, `maintenance_task.py`,
+// `resource.py`, `priority.py`). They are declared HERE, in the Module 3
+// contract module, so that a Module 4 domain field can hold a Module 3 value
+// explicitly instead of having one derived from an unrelated Module 4 field.
+//
+// Holding one of these values is a statement made by a source system. It is
+// never produced by converting a Module 4 `criticality`, `urgency`, `riskLevel`
+// or `ResourceType`, because those vocabularies do not correspond.
+
+/** Module 3 `PriorityLevel` (`optimizer/contracts/enums.py`). */
+export type OptimizerPriorityLevel = 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+/**
+ * Module 3 `ResourceType`. Deliberately NOT interchangeable with Module 4
+ * `ResourceType` (`@/types/resource`): the two sets share no value, so the only
+ * legitimate way for a Module 4 resource to carry one is an explicit
+ * compatibility field that a product decision populates.
+ */
+/**
+ * Module 3 `WorkType`, in Module 3's own vocabulary.
+ *
+ * Extracted from Module 3's compiled contract
+ * (`optimizer/contracts/__pycache__/maintenance_task.cpython-313.pyc`), which
+ * declares `work_type: WorkType` with NO default - a request omitting it is
+ * rejected. Module 3's values are PREVENTIVE | CORRECTIVE | INSPECTION | REPAIR |
+ * REPLACEMENT | UPGRADE.
+ *
+ * Module 4's `MaintenanceTask.workType` is a bare `string` and shares only a
+ * partial vocabulary with this. Coercing one into the other would invent a
+ * maintenance commitment, so `module3WorkType` is declared separately and left
+ * unset until a person states it.
+ */
+export type OptimizerWorkType =
+  | 'PREVENTIVE'
+  | 'CORRECTIVE'
+  | 'INSPECTION'
+  | 'REPAIR'
+  | 'REPLACEMENT'
+  | 'UPGRADE';
+
+export type OptimizerResourceType =
+  | 'ENGINEERING_TRAIN'
+  | 'MACHINERY'
+  | 'MANPOWER'
+  | 'MATERIAL'
+  | 'POSSESSION';
+
+/** Module 3 `OccupancyType` — what kind of possession is being held. */
+export type OptimizerOccupancyType = 'TRAFFIC_BLOCK' | 'POSSESSION' | 'SLOW_MOVEMENT';
+
+/** Module 3 `BlockStatus` (`ExistingBlock.status`). */
+export type OptimizerOccupancyStatus =
+  | 'PLANNED'
+  | 'APPROVED'
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+/**
+ * The statuses that mean possession is actually in force. `PLANNED` is an
+ * intention and `CANCELLED` is a withdrawal, so neither describes occupancy a
+ * solver must plan around.
+ */
+export const GRANTED_OCCUPANCY_STATUSES: readonly OptimizerOccupancyStatus[] = [
+  'APPROVED',
+  'ACTIVE',
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Module 3 error codes (documented set; unknown codes stay possible)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -405,6 +478,22 @@ export const UNRESOLVED_OPTIMIZER_MAPPINGS: readonly UnresolvedMapping[] = [
     module4: 'BlockRequest.priority (number)',
     status: 'UNRESOLVED',
     reason: 'A risk level is not a priority weight; no conversion table has been agreed.',
+  },
+  {
+    id: 'criticality_to_priority',
+    module3: 'context.tasks[].priority (PriorityLevel: LOW | MEDIUM | HIGH | URGENT)',
+    module4: "MaintenanceTask.criticality (CriticalityLevel) / .urgency (UrgencyLevel)",
+    status: 'UNRESOLVED',
+    reason:
+      'CRITICAL and URGENT are different axes, and Module 3 has no CRITICAL value while Module 4 has no URGENT one. Collapsing either direction would fabricate a commitment. Distinct from `risk_to_priority`, which covers BlockRequest.priority (a number).',
+  },
+  {
+    id: 'requested_date_to_due_by',
+    module3: 'context.tasks[].due_by (date)',
+    module4: 'MaintenanceTask.requestedDate (date)',
+    status: 'UNRESOLVED',
+    reason:
+      'Same wire type, different meaning: requestedDate is when the work was requested, due_by is a deadline. Treating one as the other invents a commitment the source data never made.',
   },
   {
     id: 'confidence_to_score',

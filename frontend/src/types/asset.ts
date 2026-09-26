@@ -26,6 +26,7 @@ export interface Asset {
   department: Department;
   assetType: AssetType;
   sectionId: string;
+  corridorId?: string;
   location: string;
   criticality: CriticalityLevel;
   condition: AssetCondition;

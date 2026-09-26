@@ -4,6 +4,7 @@ export * from './useBlockRequests';
 export * from './useConflicts';
 export * from './useIntegratedBlocks';
 export * from './useCorridors';
+export * from './usePlannerScope';
 export * from './useTimetable';
 export * from './useAI';
 export * from './useAudit';

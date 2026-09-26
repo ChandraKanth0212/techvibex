@@ -26,6 +26,11 @@ export interface OptimizerPlanState {
   requestId: string | null;
   dataMode: string | null;
   storage: string | null;
+  /**
+   * Module 3 `solver_status`, captured verbatim (e.g. `OPTIMAL`). Optional at the
+   * call site so an older four-field `record()` still compiles.
+   */
+  solverStatus: string | null;
   availability: OptimizerPlanAvailability;
   /** Why the stored id is unusable, when `availability === 'UNAVAILABLE'`. */
   unavailableReason: string | null;
@@ -53,6 +58,7 @@ function emptyState(): OptimizerPlanState {
     requestId: null,
     dataMode: null,
     storage: null,
+    solverStatus: null,
     availability: 'EMPTY',
     unavailableReason: null,
     lastKnownPlanId: null,
@@ -73,12 +79,13 @@ export class OptimizerPlanStateStore {
   }
 
   /** Records the id returned by a successful `generatePlan`. */
-  record(plan: { planId: string; requestId: string; dataMode: string; storage: string }): OptimizerPlanState {
+  record(plan: { planId: string; requestId: string; dataMode: string; storage: string; solverStatus?: string }): OptimizerPlanState {
     this.state = {
       planId: plan.planId,
       requestId: plan.requestId,
       dataMode: plan.dataMode,
       storage: plan.storage,
+      solverStatus: plan.solverStatus ?? null,
       availability: 'AVAILABLE',
       unavailableReason: null,
       lastKnownPlanId: plan.planId,

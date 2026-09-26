@@ -6,6 +6,7 @@
 
 import { Department } from './asset';
 import { ConstraintValidationResult, OperationalImpact } from './block';
+import type { OptimizerPriorityLevel } from './optimizer';
 
 export type RecommendationType =
   | 'INTEGRATED_BLOCK'
@@ -25,6 +26,20 @@ export interface ProposedWindow {
 
 export interface AIRecommendation {
   recommendationId: string;
+  /**
+   * Single task this recommendation concerns, matching Module 3
+   * `PriorityResult.task_id`.
+   *
+   * Distinct from `affectedTaskIds`, which is a list and is what most
+   * recommendations actually carry. A one-element `affectedTaskIds` is not
+   * treated as a `taskId`: collapsing a list into a scalar would assert that the
+   * recommendation concerns exactly one task, which the list form does not say.
+   */
+  taskId?: string;
+  /** Module 3 `PriorityResult.priority_score`: a number on its own scale. */
+  priorityScore?: number;
+  /** Module 3 `PriorityResult.recommended_priority` (LOW | MEDIUM | HIGH | URGENT). */
+  recommendedPriority?: OptimizerPriorityLevel;
   type: RecommendationType;
   status: RecommendationStatus;
   affectedTaskIds: string[];
