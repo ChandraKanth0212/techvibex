@@ -3,7 +3,10 @@
 Phase 1 exposes ``GET /health``. Phase 7A adds the ``/api/optimizer`` pipeline
 endpoints orchestrated through :class:`app.services.pipeline.PlanBuilder` and
 an in-memory demo plan store (``SYNTHETIC_DEMO / IN_MEMORY`` — plans are not
-persisted across application restarts).
+persisted across application restarts). Phase 8C freezes that surface into the
+stable DTO contract in :mod:`app.schemas.api`, mapped from the internal results
+by :mod:`app.api.dto_mappers`, with every failure rendered as the
+:class:`~app.schemas.api.ErrorResponse` envelope.
 """
 
 from fastapi import FastAPI

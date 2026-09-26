@@ -6,15 +6,15 @@ AI-Assisted Railway Integrated Maintenance Block Planner.
 an optimized, verifiable railway maintenance block schedule using Google OR-Tools
 CP-SAT.
 
-> **Phase 6 status:** the OR-Tools CP-SAT `ScheduleOptimizer` (3B) is
-> implemented and tested on top of Phase 2 candidate generation/validation and
-> Phase 3A integrated-block detection, an **independent** `ScheduleValidator`
-> (Phase 4) adjudicates finished schedules, a deterministic
-> `MetricsCalculator` (Phase 5) turns the schedule + validation into KPIs, and a
-> deterministic, evidence-based `ExplainabilityService` (Phase 6) renders
-> machine-readable reason codes + human-readable explanations — without any LLM.
-> The full API beyond `/health` remains (see
-> [Intentionally deferred](#intentionally-deferred)).
+> **Status:** the OR-Tools CP-SAT `ScheduleOptimizer` (3B) is implemented and
+> tested on top of Phase 2 candidate generation/validation and Phase 3A
+> integrated-block detection, an **independent** `ScheduleValidator` (Phase 4)
+> adjudicates finished schedules, a deterministic `MetricsCalculator` (Phase 5)
+> turns the schedule + validation into KPIs, and a deterministic,
+> evidence-based `ExplainabilityService` (Phase 6) renders machine-readable
+> reason codes + human-readable explanations — without any LLM. Phase 7A
+> exposes the whole pipeline over HTTP and Phase 8C freezes that HTTP surface
+> into a stable, DTO-typed contract for Module 4.
 
 ---
 
@@ -38,18 +38,22 @@ Maintenance Tasks
   → Independent Schedule Validation   [Phase 4 ✅]
   → Metrics                           [Phase 5 ✅]
   → Explainable Schedule              [Phase 6 ✅]
-  → API (Module 4 frontend)
+  → REST API (Module 4 frontend)      [Phase 7A ✅]
+  → Stable API DTO contract           [Phase 8C ✅]
 ```
 
 ## Architecture
 
 - **`contracts/`** — *temporary* shared Pydantic schemas (see its README) to be
   moved to the repository-wide `/contracts` once Modules 1/2 publish them.
-- **`app/api`** — FastAPI routes (only `GET /health` so far).
+- **`app/api`** — FastAPI routes, the app factory, the structured error handlers
+  and the internal→API DTO mappers.
 - **`app/core`** — configuration (`RAILOPT_*` env vars, defaults, objective
   weights) and `PlanningContext` (typed world-state snapshot for the engines).
 - **`app/models`** — engine-internal domain models (e.g. `DataMode`).
-- **`app/schemas`** — API response models.
+- **`app/schemas`** — the published transport contract: `api.py` holds the
+  stable response DTOs Module 4 codes against, `optimizer.py` the request
+  models, `health.py` the liveness payload.
 - **`app/services`** — abstract interfaces for the pipeline stages, plus the
   concrete `CandidateGenerator`, `IntegratedBlockDetector`, `ScheduleOptimizer`,
   `ScheduleValidator`, `MetricsCalculator` and `ExplainabilityService`
@@ -68,19 +72,22 @@ Maintenance Tasks
 ```
 optimizer/
 ├── app/
-│   ├── api/            health router + app factory
+│   ├── api/            health + optimizer routers, app factory, structured
+│   │                   error handlers, internal→API DTO mappers
 │   ├── core/           Settings / ObjectiveWeights / env loading / PlanningContext
 │   ├── models/         DataMode and other internal enums
-│   ├── schemas/        health response schema
+│   ├── schemas/        api.py (stable response DTOs) + optimizer.py (requests)
+│   │                   + health.py
 │   ├── services/       pipeline ABCs (CandidateGenerator, ConstraintEngine,
 │   │                   IntegratedBlockDetector, ScheduleOptimizer,
 │   │                   ScheduleValidator, MetricsCalculator)
-│   │   ├── candidate_generator.py   concrete CandidateGenerator (Phase 2)
-│   │   ├── integrated_block_detector.py concrete IntegratedBlockDetector (Phase 3A)
-│   │   ├── schedule_optimizer.py    concrete CP-SAT ScheduleOptimizer (Phase 3B)
-│   │   ├── schedule_validator.py    concrete ScheduleValidator (Phase 4)
-│   │   ├── metrics_calculator.py    concrete MetricsCalculator (Phase 5)
-│   │   └── explainability.py        concrete ExplainabilityService (Phase 6)
+│   │                   ├── candidate_generator.py   concrete CandidateGenerator (Phase 2)
+│   │                   ├── integrated_block_detector.py concrete IntegratedBlockDetector (Phase 3A)
+│   │                   ├── schedule_optimizer.py    concrete CP-SAT ScheduleOptimizer (Phase 3B)
+│   │                   ├── schedule_validator.py    concrete ScheduleValidator (Phase 4)
+│   │                   ├── metrics_calculator.py    concrete MetricsCalculator (Phase 5)
+│   │                   ├── explainability.py        concrete ExplainabilityService (Phase 6)
+│   │                   └── pipeline.py              PlanBuilder orchestration (Phase 7A)
 │   ├── constraints/    ConflictCode + concrete ConstraintEngine (Phase 2)
 │   ├── optimizer/      reserved (Phase 3)
 │   ├── validators/     reserved (Phase 3)
@@ -90,7 +97,7 @@ optimizer/
 ├── contracts/          TEMPORARY shared schemas (see contracts/README.md)
 ├── tests/
 │   ├── unit/           contracts, config, services, engine, generator
-│   ├── integration/    FastAPI /health tests
+│   ├── integration/    FastAPI /health + pipeline routes + Module 4 API contract
 │   ├── scenarios/      Phase 2/3A/3B/4/5/6 end-to-end scenarios
 │   └── performance/    reserved (Phase 3)
 ├── demo_data/          reserved (Phase 3)
@@ -442,10 +449,24 @@ business logic is duplicated in the routes.**
 {
   "plan_id": "PLAN-3DA9A4233AF95580", "data_mode": "SYNTHETIC_DEMO", "storage": "IN_MEMORY",
   "request_id": "REQ-1", "solver_status": "OPTIMAL",
-  "schedule": { "schedule_id": "SCHED-REQ-1", "status": "OPTIMAL", "selected_blocks": [], "scheduled_task_ids": ["T1"], "unscheduled_task_ids": [], "solver_metadata": {} },
-  "validation": { "valid": true, "errors": [], "warnings": [], "checked_block_count": 1, "checked_task_count": 1, "solver_status": "OPTIMAL" },
-  "metrics": { "task_coverage_ratio": 1.0, "integrated_blocks_count": 0, "validation_accuracy_percent": 100.0, "extra": {} },
-  "explanations": { "schedule_id": "SCHED-REQ-1", "schedule_valid": true, "records": [] },
+  "schedule": {
+    "schedule_id": "SCHED-REQ-1", "status": "OPTIMAL", "message": "", "objective_value": 0.0,
+    "scheduled_task_ids": ["T1"], "unscheduled_task_ids": [], "unscheduled_tasks": [],
+    "selected_blocks": [
+      {
+        "block_id": "BLK-1", "task_ids": ["T1"], "request_ids": ["REQ-1"],
+        "corridor_id": "COR-1", "section": "S1",
+        "start_time": "2026-01-10T06:00:00Z", "end_time": "2026-01-10T07:00:00Z",
+        "duration_minutes": 60, "integrated": false, "block_type": "SINGLE",
+        "participating_departments": ["Signalling"], "resources": [],
+        "status": "SCHEDULED"
+      }
+    ],
+    "solver_metadata": {}
+  },
+  "validation": { "schedule_id": "SCHED-REQ-1", "solver_status": "OPTIMAL", "valid": true, "errors": [], "warnings": [], "checked_block_count": 1, "checked_task_count": 1, "metadata": {} },
+  "metrics": { "total_tasks_requested": 1, "total_tasks_scheduled": 1, "task_coverage_ratio": 1.0, "integrated_blocks_count": 0, "validation_accuracy_percent": 100.0, "extra": {} },
+  "explanations": { "schedule_id": "SCHED-REQ-1", "solver_status": "OPTIMAL", "schedule_valid": true, "validation_provided": true, "records": [], "metadata": {} },
   "candidates": [], "integrated_candidates": [],
   "meta": { "scope_task_ids": ["T1"] }
 }
@@ -453,12 +474,14 @@ business logic is duplicated in the routes.**
 
 Solver status is preserved verbatim (never relabelled); the independent
 `validation.valid` is decided only by the schedule content, and every explanation
-record keeps its `reason_codes` and `evidence`.
+record keeps its `reason_codes` and `evidence`. See
+[Phase 8C](#phase-8c--stable-module-4-api-dto-contract) for the DTO contract
+these shapes are guaranteed by.
 
 **Error behaviour** — all errors use one envelope:
 
 ```json
-{ "error": { "code": "...", "message": "...", "details": {} } }
+{ "error": { "code": "...", "message": "...", "details": {}, "request_id": "REQ-1" } }
 ```
 
 | HTTP | Code | Trigger |
@@ -472,6 +495,10 @@ record keeps its `reason_codes` and `evidence`.
 | `409` | `PLAN_METRICS_UNAVAILABLE` / `PLAN_VALIDATION_UNAVAILABLE` | requested view absent from the stored plan |
 | `422` | `REQUEST_VALIDATION` | malformed / out-of-range request body |
 | `500` | `INTERNAL_ERROR` | unexpected failure (no tracebacks leaked) |
+
+`error.request_id` is resolved from, in order: the `x-request-id` request header,
+the body's `request.request_id` (or a top-level `request_id`), else `null` — so
+every failure is correlatable without parsing the message.
 
 **Determinism & storage** — plan ids are content-addressed
 (`PLAN-<sha256(request+context+settings)>`); idempotent identical requests return
@@ -493,6 +520,64 @@ curl -s -X POST http://127.0.0.1:8000/api/optimizer/generate -H "Content-Type: a
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/optimizer/generate -ContentType "application/json" -InFile body.json
 ```
+
+### Phase 8C — stable Module 4 API DTO contract
+
+Phase 7A's endpoints returned the *internal* contract models
+(`ScheduleResult`, `BlockCandidate`, `ScheduleMetrics`, …) verbatim. That
+coupled Module 4 to engine internals: renaming a field in `contracts/` silently
+broke the frontend, and every solver/metadata field leaked across the wire.
+
+Phase 8C puts a dedicated transport layer between the pipeline and HTTP:
+
+```
+pipeline outcome  →  app/api/dto_mappers.py  →  app/schemas/api.py  →  JSON
+                    (normalise + sanitise)     (the published DTOs)
+```
+
+- **`app/schemas/api.py`** — the stable DTOs Module 4 codes against:
+  `PlanResponse`, `ScheduleDTO`, `SelectedBlockDTO`, `UnscheduledTaskDTO`,
+  `ValidationDTO`, `MetricsDTO`, `ExplanationDTO` / `ExplanationRecordDTO`,
+  `CandidateDTO`, `IntegratedBlockDTO`, `CandidatesResponse`,
+  `IntegratedBlocksResponse`, `ValidationResponse`, `PlanMetricsResponse`,
+  `PlanConflictsResponse` and the `ErrorResponse` / `ErrorDetailDTO` envelope.
+  Each is also exported as an `Api*` alias (`ApiPlanResponse`, `ApiSchedule`, …)
+  so the transport layer can be imported without colliding with the engine's own
+  names. Unknown fields are ignored on input, so **old Module 4 clients keep
+  working** when the engine grows a field.
+- **`app/api/dto_mappers.py`** — the only place internal results become DTOs.
+  It never exposes an engine object: values are coerced to primitives, metadata
+  dicts are key-sorted and stripped of non-serialisable entries, and collections
+  (`selected_blocks`, `scheduled_task_ids`, `reason_codes`, …) are sorted so
+  repeated calls emit byte-identical JSON.
+- **`to_internal_schedule()`** is the reverse hop for `POST /validate`: a
+  `ScheduleDTO` submitted by Module 4 is rebuilt into a `ScheduleResult`, so the
+  validator still verifies a real engine object rather than a DTO.
+- **Derived, not invented, fields.** A selected block's `request_ids`,
+  `participating_departments` and `resources` are resolved from the planning
+  context for its tasks; `duration_minutes` is derived from the block span when
+  not declared; `integrated`/`block_type` agree. Nothing is fabricated when the
+  context has no such data — the field is simply empty.
+- **Determinism.** Run-wall-clock solver metadata (`solve_time_seconds`,
+  `runtime_seconds`, `timed_out`, `generated_at`, …) is removed before a plan is
+  stored or returned, so identical input + configuration produce byte-identical
+  responses. `tests/integration/test_module4_api_contract.py` asserts this by
+  generating the same plan twice and comparing the full body.
+- **Honest OpenAPI.** Every route declares its own `response_model` *and* its
+  error statuses against the `ErrorResponse` model, so `/openapi.json` describes
+  the envelope the API really returns instead of FastAPI's default
+  `HTTPValidationError`. The runtime error body is *produced from* that DTO, so
+  contract and wire format cannot drift.
+- **Backwards compatibility.** `app/schemas/optimizer.py` still re-exports every
+  response name, so existing imports (`from app.schemas import PlanResponse`)
+  keep resolving — now to the stable DTO.
+
+**Contract test** — `tests/integration/test_module4_api_contract.py` pins the
+public surface: the exact top-level / schedule / block key sets, the candidate
+and integrated-block key sets, the validation and error key sets, DTO
+round-tripping, error-envelope equality, runtime-metadata exclusion, the
+determinism check, and the OpenAPI assertions (DTO models present, internal
+contract models absent, `ErrorResponse` documented on all five error statuses).
 
 ## Configuration
 
@@ -540,8 +625,11 @@ curl http://127.0.0.1:8000/health
 `PRODUCTION`.
 
 The pipeline endpoints live under `/api/optimizer` (full list in the
-[Phase 7A section](#phase-7a--rest-api-pipeline-integration)). Served data is
-synthetic; plans are stored only in memory for the lifetime of the process.
+[Phase 7A section](#phase-7a--rest-api-pipeline-integration)); the exact request
+and response contract is in
+[Phase 8C](#phase-8c--stable-module-4-api-dto-contract) and browsable at
+`/docs` (Swagger UI) or `/openapi.json`. Served data is synthetic; plans are
+stored only in memory for the lifetime of the process.
 
 ### Docker
 
@@ -575,7 +663,10 @@ pytest tests/scenarios
   `AIRecommendation` (`PriorityResult`). Module 3 currently carries it in the
   `PlanningContext` (`priorities`) for later objective weighting.
 - **Module 4 (Frontend / API):** consumes Module 3 outputs (schedule, metrics,
-  explainability) through the `/api/optimizer` endpoints plus `/health`.
+  explainability) through the `/api/optimizer` endpoints plus `/health`. The
+  wire contract is the stable DTO layer in `app/schemas/api.py` (Phase 8C), not
+  the internal `contracts/` models, so a contract change inside Module 3 does not
+  break the frontend.
 
 ## Intentionally deferred
 
@@ -589,7 +680,8 @@ Not implemented yet (interfaces prepared in `app/services/`):
 - Scenario/performance breadth and demo dataset
 - Frontend rendering (Module 4)
 
-Phases 2, 3A, 3B, 4, 5, 6 and 7A (candidate generation, hard-constraint validation,
-integrated-block detection, CP-SAT optimization, independent schedule validation,
-KPI computation, explainable schedules and the REST API surface) are complete;
-replanning, persistence and auth follow with Modules 1, 2 and 4.
+Phases 2, 3A, 3B, 4, 5, 6, 7A and 8C (candidate generation, hard-constraint
+validation, integrated-block detection, CP-SAT optimization, independent schedule
+validation, KPI computation, explainable schedules, the REST API surface and its
+stable DTO contract) are complete; replanning, persistence and auth follow with
+Modules 1, 2 and 4.

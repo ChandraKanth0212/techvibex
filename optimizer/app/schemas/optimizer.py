@@ -1,17 +1,4 @@
-"""Request/response models for the Phase 7A REST API.
-
-These DTOs are the only shapes the HTTP layer accepts or emits. Internal
-engine objects (the OR-Tools model, service internals) never cross this
-boundary. The shared contract models (``ScheduleResult``,
-``ScheduleValidationResult``, ``ScheduleMetrics``, ``ExplainabilityResult``,
-``BlockCandidate``, ``IntegratedBlockCandidate``, ...) are embedded verbatim so
-no solver metadata, reason code or evidence is lost during serialisation.
-
-Per-request settings are expressed with :class:`ModelSettings`, a validated
-subset of :class:`app.core.config.Settings`; unknown/missing settings fall back
-to the application configuration, guaranteeing determinism for identical input
-plus configuration.
-"""
+"""Request models and stable response-model re-exports for the REST API."""
 
 from __future__ import annotations
 
@@ -19,16 +6,27 @@ from pydantic import BaseModel, Field
 
 from app.core.config import Settings
 from app.core.context import PlanningContext
-from contracts import (
-    BlockCandidate,
-    BlockRequest,
-    ConstraintViolation,
-    ExplainabilityResult,
-    IntegratedBlockCandidate,
-    ScheduleMetrics,
-    ScheduleResult,
-    ScheduleValidationResult,
+from app.schemas.api import (
+    CandidatesResponse,
+    CandidateDTO,
+    ErrorDetailDTO,
+    ErrorResponse,
+    ExplanationDTO,
+    ExplanationRecordDTO,
+    IntegratedBlockDTO,
+    IntegratedBlocksResponse,
+    MetricsDTO,
+    PlanConflictsResponse,
+    PlanMetricsResponse,
+    PlanResponse,
+    ScheduleDTO,
+    SelectedBlockDTO,
+    UnscheduledTaskDTO,
+    ValidationDTO,
+    ValidationResponse,
+    ViolationDTO,
 )
+from contracts import BlockRequest
 
 # ------------------------------------------------------------------ requests
 
@@ -118,112 +116,38 @@ class DiscoverRequest(BaseModel):
 
 
 class ValidateRequest(BaseModel):
-    """Body for ``POST /api/optimizer/validate``.
+    """Body for ``POST /api/optimizer/validate``."""
 
-    Accepts a ``ScheduleResult``-like payload plus the planning context; the
-    pipeline never re-runs the optimizer for this endpoint.
-    """
-
-    schedule: ScheduleResult
+    schedule: ScheduleDTO
     context: PlanningContext = Field(default_factory=PlanningContext)
 
 
 # ----------------------------------------------------------------- responses
 
 
-class CandidatesResponse(BaseModel):
-    """Generated + rejected block candidates for a task scope."""
-
-    task_ids: list[str]
-    candidate_count: int
-    feasible_count: int
-    rejected_count: int
-    rejection_codes: dict[str, int]
-    candidates: list[BlockCandidate]
-    data_mode: str = "SYNTHETIC_DEMO"
-    storage: str = "IN_MEMORY"
-
-
-class IntegratedBlocksResponse(BaseModel):
-    """Discovered integrated-block groups for a task scope."""
-
-    task_ids: list[str]
-    groups_examined: int
-    compatible_count: int
-    rejection_codes: dict[str, int]
-    candidates: list[IntegratedBlockCandidate]
-    data_mode: str = "SYNTHETIC_DEMO"
-    storage: str = "IN_MEMORY"
-
-
-class ValidationResponse(BaseModel):
-    """Independent validation outcome for a submitted schedule."""
-
-    schedule_id: str
-    solver_status: str
-    valid: bool
-    error_count: int
-    warning_count: int
-    checked_block_count: int
-    checked_task_count: int
-    errors: list[ConstraintViolation]
-    warnings: list[ConstraintViolation]
-    metadata: dict
-
-
-class PlanResponse(BaseModel):
-    """Full structured plan stored/returned by the API.
-
-    ``storage`` is always ``IN_MEMORY`` in this phase: plans are kept only for
-    the lifetime of the Python process and vanish on restart.
-    """
-
-    plan_id: str
-    data_mode: str = "SYNTHETIC_DEMO"
-    storage: str = "IN_MEMORY"
-    request_id: str
-    solver_status: str
-    schedule: ScheduleResult
-    validation: ScheduleValidationResult | None = None
-    metrics: ScheduleMetrics | None = None
-    explanations: ExplainabilityResult | None = None
-    candidates: list[BlockCandidate] = Field(default_factory=list)
-    integrated_candidates: list[IntegratedBlockCandidate] = Field(default_factory=list)
-    meta: dict = Field(default_factory=dict)
-
-
-class PlanMetricsResponse(BaseModel):
-    """KPIs for a stored plan."""
-
-    plan_id: str
-    metrics: ScheduleMetrics
-
-
-class PlanConflictsResponse(BaseModel):
-    """Structured conflict/violation summary for a stored plan."""
-
-    plan_id: str
-    solver_status: str
-    validation_valid: bool | None
-    error_count: int
-    warning_count: int
-    errors: list[ConstraintViolation]
-    warnings: list[ConstraintViolation]
-    rejected_candidate_count: int
-    candidate_rejection_codes: dict[str, int]
-
-
 __all__ = [
     "CandidatesRequest",
     "CandidatesResponse",
+    "CandidateDTO",
     "DiscoverRequest",
+    "ErrorDetailDTO",
+    "ErrorResponse",
+    "ExplanationDTO",
+    "ExplanationRecordDTO",
+    "IntegratedBlockDTO",
     "IntegratedBlocksResponse",
+    "MetricsDTO",
     "ModelObjectiveWeights",
     "ModelSettings",
     "OptimizeRequest",
     "PlanConflictsResponse",
     "PlanMetricsResponse",
     "PlanResponse",
+    "ScheduleDTO",
+    "SelectedBlockDTO",
+    "UnscheduledTaskDTO",
     "ValidateRequest",
+    "ValidationDTO",
     "ValidationResponse",
+    "ViolationDTO",
 ]

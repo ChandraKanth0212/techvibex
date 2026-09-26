@@ -15,7 +15,7 @@ from __future__ import annotations
 import threading
 from typing import Dict, List, Optional
 
-from app.schemas.optimizer import PlanResponse
+from app.schemas.api import PlanResponse
 
 
 class InMemoryPlanStore:
