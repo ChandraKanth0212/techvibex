@@ -26,6 +26,25 @@
  *   - Fill a missing required field with a placeholder, a default, or a guess.
  *     A missing field stays `UNAVAILABLE_FROM_MODULE_4` and is reported as such.
  *
+ * PHASE 9B-8
+ * ----------
+ * Five previously undecided inputs now have approved decisions, and each is
+ * resolved through a dedicated module rather than inline here:
+ *   - `tasks.priority`         `@/services/taskPriorityDecision` - authoritative
+ *     only once a human has CONFIRMED it; an AI recommendation is advisory.
+ *   - `request.occupancy_type` `@/services/occupancyAuthority` - answered by the
+ *     possession system only. A `BlockRequest` is a request, not a grant.
+ *   - `resources.resource_type` `@/services/resourceTypeMapping` - answered by an
+ *     approved, versioned mapping table, which is currently EMPTY.
+ *   - `trains.movement_id`     `@/services/optimizerSourceContracts` - a per-run
+ *     register that is not connected.
+ *   - `corridors.sections`     `@/services/optimizerSourceContracts` - an
+ *     authoritative survey that is not connected.
+ *
+ * Phase 9B-8 approved mechanisms, not data. All five remain BLOCKED, and this
+ * module is not weakened to say otherwise: the decisions made the conditions
+ * STRICTER, not looser.
+ *
  * The Module 3 `SYNTHETIC_DEMO` path is a separate, valid route to READY and is
  * never mixed with Module 4 provenance.
  */
@@ -33,6 +52,8 @@
 import {
   UNRESOLVED_OPTIMIZER_MAPPINGS,
   GRANTED_OCCUPANCY_STATUSES,
+  MODULE_3_RESOURCE_TYPES,
+  MODULE_3_TASK_PRIORITIES,
   type OptimizerDataMode,
   type UnresolvedMapping,
 } from '@/types/optimizer';
@@ -45,12 +66,27 @@ import {
   plannerScopeTaskIds,
   type PlannerScope,
 } from '@/utils/plannerScope';
+import { resolveAuthoritativeTaskPriority } from './taskPriorityDecision';
+import { resolveAuthoritativeRequestOccupancy } from './occupancyAuthority';
+import {
+  assessSourceLinkage,
+  CORRIDOR_TOPOLOGY_SOURCE_KIND,
+  MOVEMENT_REGISTER_SOURCE_KIND,
+  POSSESSION_GRANT_SYSTEM_SOURCE_KIND,
+  type AuthoritativeSourceLinkage,
+} from './optimizerSourceContracts';
+import {
+  APPROVED_RESOURCE_TYPE_MAPPINGS,
+  MODULE_4_RESOURCE_TYPES,
+  RESOURCE_TYPE_MAPPING_VERSION,
+  resolveResourceModule3Type,
+} from './resourceTypeMapping';
 import type { MaintenanceTask } from '@/types/maintenance';
 import type { BlockRequest, IntegratedBlock } from '@/types/block';
 import type { ExistingOccupancy } from '@/types/occupancy';
 import type { Asset } from '@/types/asset';
 import type { GoodsForecast, Train } from '@/types/train';
-import type { Resource } from '@/types/resource';
+import type { Resource, ResourceTypeMapping } from '@/types/resource';
 import type { Corridor } from '@/types/corridor';
 import type { AIRecommendation } from '@/types/ai';
 
@@ -58,18 +94,11 @@ import type { AIRecommendation } from '@/types/ai';
 // Read from Module 3's own vendored demo payload. These are the vocabularies a
 // real request must satisfy; recorded here so readiness can compare against them
 // without loading the fixture.
-const MODULE_3_RESOURCE_TYPES = [
-  'ENGINEERING_TRAIN',
-  'MACHINERY',
-  'MANPOWER',
-  'MATERIAL',
-  'POSSESSION',
-] as const;
-
-const MODULE_3_TASK_PRIORITIES = ['HIGH', 'LOW', 'MEDIUM', 'URGENT'] as const;
-
-/** Module 3 `OccupancyType`, from its compiled contract. */
-const MODULE_3_OCCUPANCY_TYPES = ['POSSESSION', 'SLOW_MOVEMENT', 'TRAFFIC_BLOCK'] as const;
+//
+// Phase 9B-8: MODULE_3_RESOURCE_TYPES and MODULE_3_TASK_PRIORITIES now live in
+// `@/types/optimizer` and MODULE_4_RESOURCE_TYPES in `@/types/resource`, so that
+// readiness and the Phase 9B-8 decision modules read one copy each. The values
+// are unchanged.
 
 /**
  * Module 3 `WorkType`, extracted from its compiled contract. `work_type` carries
@@ -90,16 +119,6 @@ const MODULE_3_ASSET_TYPES = [
   'SIGNALLING',
   'STATION',
   'TRACK',
-] as const;
-
-/** Module 4 `ResourceType` values. Zero overlap with `MODULE_3_RESOURCE_TYPES`. */
-const MODULE_4_RESOURCE_TYPES = [
-  'TRACK_MACHINE',
-  'MAINTENANCE_CREW',
-  'SIGNAL_CREW',
-  'OHE_CREW',
-  'INSPECTION_TEAM',
-  'VEHICLE',
 ] as const;
 
 // ── Result vocabulary ─────────────────────────────────────────────────────────
@@ -159,6 +178,13 @@ export interface OptimizerRequestReadiness {
   };
   readonly inputs: readonly OptimizerReadinessInput[];
   readonly blocking: readonly OptimizerReadinessInput[];
+  /**
+   * Unsatisfied inputs from {@link INTEGRATION_COMPLETENESS_GATES}: reported,
+   * not blocking. Present and non-empty alongside `state: 'READY'` is the
+   * intended case, not a contradiction — it says the request is buildable while
+   * a source Module 4 would need in order to be complete is still unconnected.
+   */
+  readonly integrationGates: readonly OptimizerReadinessInput[];
   readonly warnings: readonly string[];
   /** Echoed unchanged from the registry; this module resolves nothing. */
   readonly unresolvedMappings: readonly UnresolvedMapping[];
@@ -191,6 +217,54 @@ export interface Module4ReadinessSnapshot {
   readonly occupancies: readonly ExistingOccupancy[];
   readonly recommendations: readonly AIRecommendation[];
   readonly scope: PlannerScope;
+  /**
+   * Phase 9B-8 Decision C: the approved resource-type mapping table.
+   *
+   * Optional, defaulting to {@link APPROVED_RESOURCE_TYPE_MAPPINGS} — which is
+   * EMPTY, because no correspondence has been approved. It is a field rather
+   * than a module constant so that an approved table can be supplied when one
+   * exists, and so that "an approved mapping can be applied later" is testable
+   * without editing the mapping module or the Module 4 resource enum.
+   */
+  readonly resourceTypeMappings?: readonly ResourceTypeMapping[];
+  /**
+   * Phase 9B-8 Decision D: the claim that a per-run movement register is
+   * connected. METADATA ONLY — no register object enters the snapshot.
+   *
+   * `Train.movementId` carrying a value is necessary but not sufficient: a
+   * hand-written 'M1' satisfies every check that looks at the field and still
+   * proves nothing about a register. This linkage is the independent half of the
+   * proof. Absent (the default, and the real Module 4 state), `trains.movement_id`
+   * cannot be AVAILABLE.
+   */
+  readonly movementRegisterLinkage?: AuthoritativeSourceLinkage;
+  /**
+   * Phase 9B-8 Decision E: the claim that an authoritative corridor topology
+   * source is connected. METADATA ONLY — no topology source enters the snapshot.
+   *
+   * `Corridor.sections` holding a multi-element array is necessary but not
+   * sufficient: any caller can type two strings. This linkage is the independent
+   * half of the proof. Absent (the default, and the real Module 4 state),
+   * `corridors.sections` cannot be AVAILABLE.
+   */
+  readonly corridorTopologyLinkage?: AuthoritativeSourceLinkage;
+  /**
+   * Phase 9B-8 Decision B: the claim that a possession/grant system is
+   * connected. METADATA ONLY — no possession service or source object enters the
+   * snapshot.
+   *
+   * `ExistingOccupancy` records look authoritative: they carry a status, an
+   * `occupancyType` and a related task id, so a hand-written array of them passes
+   * every field-level check while no possession system exists. This linkage is
+   * the independent half of the proof. Absent (the default, and the real Module 4
+   * state), `request.occupancy_type` cannot be AVAILABLE.
+   *
+   * This closes the same gap as {@link movementRegisterLinkage} and
+   * {@link corridorTopologyLinkage}, and it is why an empty `occupancies` array
+   * is not merely empty but UNPROVEN: neither the array nor its absence says
+   * whether anyone is watching the network.
+   */
+  readonly possessionSourceLinkage?: AuthoritativeSourceLinkage;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -285,12 +359,32 @@ function assemble(
   const inputs = drafts
     .map(freeze)
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  /**
+   * A gate is outstanding when the input is not AVAILABLE **or** when it has no
+   * Module 4 provenance.
+   *
+   * The second half is what makes approved possession visible at all. With no
+   * possession source connected, `existing_blocks` is measured as
+   * `{present: 0, total: 0}`, which `statusFor` calls AVAILABLE because Module 3
+   * accepts an empty list — and that is true. But "the network is clear" and
+   * "nobody is telling us what is on it" are different states, and only the
+   * provenance distinguishes them. Decision B already refuses an empty possession
+   * set as proof of anything; this is the same refusal, expressed in readiness.
+   */
+  const integrationGates = INTEGRATION_COMPLETENESS_GATES.map((gateId) => {
+    const found = inputs.find((i) => i.id === gateId);
+    if (!found) throw new Error(`Unknown integration-completeness gate id: ${gateId}`);
+    return found;
+  }).filter(
+    (i) => i.status !== 'AVAILABLE' || i.source === UNAVAILABLE_SOURCE,
+  );
   return {
     state: deriveReadinessState(inputs),
     dataMode,
     scope,
     inputs,
     blocking: inputs.filter((i) => i.blocking && i.status !== 'AVAILABLE'),
+    integrationGates,
     warnings,
     unresolvedMappings: UNRESOLVED_OPTIMIZER_MAPPINGS,
     summary: summaryOf(inputs),
@@ -302,6 +396,32 @@ function byId(id: string): Draft {
   if (!found) throw new Error(`Unknown readiness input id: ${id}`);
   return { ...found, status: 'UNAVAILABLE', reason: '' };
 }
+
+// ── Integration-completeness gates ────────────────────────────────────────────
+
+/**
+ * Inputs that are reported but do NOT hold readiness below READY, because
+ * Module 3 genuinely accepts a request without them.
+ *
+ * APPROVED POSSESSION IS ONE OF THESE, and stays one even after every other
+ * input is satisfied. `existing_blocks` is an optional collection in Module 3:
+ * a request with none is valid, so an absent possession source must not be
+ * allowed to masquerade as a blocker. It is equally wrong to let it disappear,
+ * because "no possession is on the books" and "no possession system has been
+ * connected" are different states with different consequences — the first means
+ * the network is clear, the second means nobody is telling us.
+ *
+ * So it is named here, and it remains visible in `integrationGates` with its own
+ * status, reason and coverage once readiness is READY. A consumer that needs to
+ * know whether the optimiser is running against a connected possession system
+ * asks this list rather than inferring it from `state`.
+ *
+ * A gate is outstanding when its input is not AVAILABLE **or** it has no Module
+ * 4 provenance — see {@link assemble} for why the second half is necessary.
+ */
+export const INTEGRATION_COMPLETENESS_GATES: readonly string[] = [
+  'existing_blocks.approved_source',
+];
 
 // ── The required-input catalogue ──────────────────────────────────────────────
 
@@ -723,13 +843,46 @@ export function assessModule4Readiness(
     snapshot.tasks,
     (t: MaintenanceTask) => Boolean(t.preferredStart) && Boolean(t.preferredEnd),
   );
-  const taskPriorities = coverageOf(
-    snapshot.tasks,
-    (t: MaintenanceTask) => t.priority !== undefined,
+  /**
+   * Phase 9B-8 Decision A: a task counts ONLY when a human has confirmed its
+   * Module 3 priority. A bare `priority` value does not count, and an AI
+   * recommendation does not count, because Module 3 would otherwise apply its own
+   * MEDIUM default to the gap — a silent scheduling commitment nobody made.
+   */
+  const taskPriorityStates = snapshot.tasks.map((t: MaintenanceTask) =>
+    resolveAuthoritativeTaskPriority(t, snapshot.recommendations),
   );
+  const taskPriorities: ReadinessCoverage = {
+    present: taskPriorityStates.filter((s) => s.status === 'AUTHORITATIVE').length,
+    total: taskPriorityStates.length,
+  };
+  const advisedTaskCount = taskPriorityStates.filter((s) => s.status === 'RECOMMENDED').length;
+  const unconfirmedTaskCount = taskPriorityStates.filter((s) => s.status === 'UNCONFIRMED').length;
+
+  /**
+   * Phase 9B-8 Decision B: the possession system is authoritative. A block
+   * request is a REQUEST for an occupancy, never a grant, so
+   * `BlockRequest.occupancyType` is not read here at all — populating all 18
+   * mock requests would leave this exactly as blocked as it is now.
+   */
   const requestOccupancyTypes = coverageOf(
     snapshot.blockRequests,
-    (r) => r.occupancyType !== undefined,
+    (r) =>
+      resolveAuthoritativeRequestOccupancy(r, snapshot.occupancies).status === 'AUTHORITATIVE',
+  );
+  /**
+   * Phase 9B-8 Decision B, the provenance half.
+   *
+   * The coverage above counts requests that have a granted possession. That is
+   * necessary but not sufficient: the records could have been written by a caller
+   * with no possession system in existence, which is exactly what the four
+   * refused substitutes in `occupancyAuthority` cannot detect — they check what
+   * KIND of thing was offered, not where it came from. Assessed separately and
+   * never inferred.
+   */
+  const possessionSourceLinkage = assessSourceLinkage(
+    snapshot.possessionSourceLinkage,
+    POSSESSION_GRANT_SYSTEM_SOURCE_KIND,
   );
   const taskWorkTypes = coverageOf(
     snapshot.tasks,
@@ -748,22 +901,97 @@ export function assessModule4Readiness(
     (g: GoodsForecast) =>
       typeof g.volumeTonnes === 'number' && Number.isFinite(g.volumeTonnes),
   );
-  const movementIds = coverageOf(
-    snapshot.trains,
-    (t: Train) => Boolean(t.movementId),
+  /**
+   * Phase 9B-8 Decision D, half one: is the movementId present AND valid?
+   *
+   * Validity is deliberately stronger than "non-empty". A `movementId` equal to
+   * the `trainId` is the specific substitution Decision D refuses, and it is the
+   * one shape that satisfies a naive presence check perfectly, so it is rejected
+   * here rather than left to the register contract that is not connected.
+   */
+  const hasValidMovementId = (t: Train): boolean => {
+    if (typeof t.movementId !== 'string' || t.movementId.trim().length === 0) return false;
+    return t.movementId !== t.trainId;
+  };
+  const movementIds = coverageOf(snapshot.trains, hasValidMovementId);
+  /**
+   * Phase 9B-8 Decision D, half two: the independent provenance claim.
+   *
+   * Nothing in `movementIds` can establish this. Full coverage only says every
+   * train has a plausible id; it cannot say the id came from a per-run register
+   * rather than from a caller's typing. Assessed separately and never inferred.
+   */
+  const movementRegisterLinkage = assessSourceLinkage(
+    snapshot.movementRegisterLinkage,
+    MOVEMENT_REGISTER_SOURCE_KIND,
   );
-  const corridorSections = coverageOf(
-    snapshot.corridors,
-    (c: Corridor) => Array.isArray(c.sections) && c.sections.length > 0,
+  /**
+   * Phase 9B-8 Decision E, half one: is the section list present AND valid?
+   *
+   * A `sections` list that is exactly `[sectionId]` is REFUSED, not counted. That
+   * shape is what a back-fill produces, so it is indistinguishable from a
+   * back-fill and carries no surveyed information about the route's extent. A
+   * single-section corridor is a real possibility, but it cannot be told apart
+   * from a fabricated one without a topology source, so it has to be stated there
+   * rather than asserted here.
+   *
+   * The remaining checks are the ones that make "valid" mean valid rather than
+   * merely non-empty: blank entries are not section ids, and a route traverses
+   * each section once, so a repeat is not a usable ordering.
+   */
+  const isSurveyedTopology = (c: Corridor): boolean => {
+    if (!Array.isArray(c.sections) || c.sections.length === 0) return false;
+    if (!c.sections.every((s) => typeof s === 'string' && s.trim().length > 0)) {
+      return false;
+    }
+    if (c.sections.length === 1 && c.sections[0] === c.sectionId) return false;
+    // A Set, deliberately: this module is forbidden from the string-scanning
+    // operations that id-parsing would need, so duplicate detection is
+    // expressed as set membership instead.
+    const visited = new Set<string>();
+    for (const sectionId of c.sections) {
+      if (visited.has(sectionId)) return false;
+      visited.add(sectionId);
+    }
+    return true;
+  };
+  const corridorSections = coverageOf(snapshot.corridors, isSurveyedTopology);
+  /**
+   * Phase 9B-8 Decision E, half two: the independent provenance claim.
+   *
+   * Two sections is not a survey. Any caller can type two strings, so the array
+   * proves only that someone filled it in. Assessed separately and never
+   * inferred from the array.
+   */
+  const corridorTopologyLinkage = assessSourceLinkage(
+    snapshot.corridorTopologyLinkage,
+    CORRIDOR_TOPOLOGY_SOURCE_KIND,
   );
+  const restatedSectionCount = snapshot.corridors.filter(
+    (c) => Array.isArray(c.sections) && c.sections.length === 1 && c.sections[0] === c.sectionId,
+  ).length;
   const corridorNames = coverageOf(
     snapshot.corridors,
     (c: Corridor) => typeof c.name === 'string' && c.name.trim().length > 0,
   );
-  const resourceTypes = coverageOf(
-    snapshot.resources,
-    (r: Resource) => r.module3ResourceType !== undefined,
+  /**
+   * Phase 9B-8 Decision C: the approved mapping table is the only authority.
+   * It is EMPTY, so every resource is unmapped. A `module3ResourceType` set on
+   * a record does not substitute for an approved mapping, and one that
+   * contradicts an approved mapping is a CONFLICT rather than something to
+   * silently prefer.
+   */
+  const resourceTypeResults = snapshot.resources.map((r: Resource) =>
+    resolveResourceModule3Type(
+      r,
+      snapshot.resourceTypeMappings ?? APPROVED_RESOURCE_TYPE_MAPPINGS,
+    ),
   );
+  const resourceTypes: ReadinessCoverage = {
+    present: resourceTypeResults.filter((r) => r.status === 'MAPPED').length,
+    total: resourceTypeResults.length,
+  };
+  const resourceConflicts = resourceTypeResults.filter((r) => r.status === 'CONFLICT');
   const assetTypes = coverageOf(
     snapshot.assets,
     (a: Asset) => (MODULE_3_ASSET_TYPES as readonly string[]).includes(a.assetType),
@@ -852,18 +1080,25 @@ export function assessModule4Readiness(
     },
     {
       ...byId('request.occupancy_type'),
-      status: statusFor(requestOccupancyTypes),
+      status:
+        requestOccupancyTypes.total === 0
+          ? statusFor(requestOccupancyTypes)
+          : possessionSourceLinkage.ok && statusFor(requestOccupancyTypes) === 'AVAILABLE'
+            ? 'AVAILABLE'
+            : 'UNAVAILABLE',
       source:
-        requestOccupancyTypes.total > 0 && ratio(requestOccupancyTypes) === 1
+        requestOccupancyTypes.total > 0 &&
+        ratio(requestOccupancyTypes) === 1 &&
+        possessionSourceLinkage.ok
           ? MAPPED_SOURCE
           : UNAVAILABLE_SOURCE,
       reason:
         requestOccupancyTypes.total === 0
           ? 'No block requests in scope.'
-          : requestOccupancyTypes.present === 0
-            ? `BlockRequest.occupancyType exists in Module 3's own vocabulary (${MODULE_3_OCCUPANCY_TYPES.join(' | ')}) and is populated on ${requestOccupancyTypes.present}/${requestOccupancyTypes.total} block requests. Module 4 blockType (CORRIDOR | SHADOW | EMERGENCY | ROUTINE) is an operational possession class, not a grant type, so it is never mapped; Module 3's TRAFFIC_BLOCK default is never inherited silently either.`
-            : `Only ${requestOccupancyTypes.present}/${requestOccupancyTypes.total} block requests carry an explicit occupancy type; blockType is never used as a substitute.`,
-      resolvableByUserAction: true,
+          : possessionSourceLinkage.ok
+            ? `${possessionSourceLinkage.reason} The possession/grant system has granted one for ${requestOccupancyTypes.present}/${requestOccupancyTypes.total} block request(s). A BlockRequest is a REQUEST for an occupancy, so BlockRequest.occupancyType is not read here: filling in all 18 mock requests would leave this exactly as blocked as it is now. Module 4 blockType (CORRIDOR | SHADOW | EMERGENCY | ROUTINE) is an operational possession class rather than a grant type and is never mapped, and Module 3's TRAFFIC_BLOCK default is never inherited silently either.`
+            : `The possession/grant system is the authoritative source for the granted occupancy type (Phase 9B-8 Decision B) and it is not connected: ${possessionSourceLinkage.reason} ${requestOccupancyTypes.present}/${requestOccupancyTypes.total} block request(s) have a matching granted possession record, but a record is not evidence of a source: anyone can write one. A BlockRequest is a REQUEST for an occupancy, so BlockRequest.occupancyType is not read here: filling in all 18 mock requests would leave this exactly as blocked as it is now. An IntegratedBlock is a planning artefact rather than a grant, availableWindows state capacity rather than possession, and an empty possession set is indistinguishable from "nothing has ever been granted". Module 4 blockType (CORRIDOR | SHADOW | EMERGENCY | ROUTINE) is an operational possession class rather than a grant type and is never mapped, and Module 3's TRAFFIC_BLOCK default is never inherited silently either.`,
+      resolvableByUserAction: false,
       coverage: requestOccupancyTypes,
     },
 
@@ -879,9 +1114,7 @@ export function assessModule4Readiness(
       reason:
         taskPriorities.total === 0
           ? 'No tasks in scope.'
-          : taskPriorities.present === 0
-            ? `MaintenanceTask.priority exists in Module 3's own vocabulary (${MODULE_3_TASK_PRIORITIES.join(' | ')}) and is populated on ${taskPriorities.present}/${taskPriorities.total} tasks. It is never computed from criticality, urgency or riskLevel, so the remainder stays unavailable.`
-            : `Only ${taskPriorities.present}/${taskPriorities.total} tasks carry an explicit Module 3 priority; the rest have none and none is derived for them.`,
+          : `An AUTHORITATIVE Module 3 priority (${MODULE_3_TASK_PRIORITIES.join(' | ')}) requires a human CONFIRMATION (Phase 9B-8 Decision A), and ${taskPriorities.present}/${taskPriorities.total} task(s) have one. An AI recommendation is ADVISORY and is never counted: ${advisedTaskCount} task(s) carry a recommendation, ${unconfirmedTaskCount} carry a priority value with no confirmation. A recommendation never becomes MaintenanceTask.priority, and priority is never computed from criticality, urgency or riskLevel. Leaving the gap open would let Module 3 apply its own MEDIUM default, which is a commitment this application may not make.`,
       resolvableByUserAction: true,
       coverage: taskPriorities,
     },
@@ -937,13 +1170,23 @@ export function assessModule4Readiness(
     // ── Trains ──────────────────────────────────────────────────────────────
     {
       ...byId('trains.movement_id'),
-      status: statusFor(movementIds),
-      reason:
+      status:
         movementIds.total === 0
-          ? 'No trains in scope.'
-          : movementIds.present === 0
-            ? `Train.movementId is populated on ${movementIds.present}/${movementIds.total} trains. Module 3 also refuses to accept a Module 4 trainId as a movement_id, so a movement identity has to be recorded in its own right.`
-            : `Only ${movementIds.present}/${movementIds.total} trains carry a movementId; a trainId is never accepted in its place.`,
+          ? statusFor(movementIds)
+          : movementRegisterLinkage.ok && statusFor(movementIds) === 'AVAILABLE'
+            ? 'AVAILABLE'
+            : 'UNAVAILABLE',
+      source:
+        movementIds.total > 0 &&
+        ratio(movementIds) === 1 &&
+        movementRegisterLinkage.ok
+          ? MAPPED_SOURCE
+          : UNAVAILABLE_SOURCE,
+      reason: movementIds.total === 0
+        ? 'No trains in scope.'
+        : movementRegisterLinkage.ok
+          ? `${movementRegisterLinkage.reason} ${movementIds.present}/${movementIds.total} trains carry a movementId that differs from its trainId.`
+          : `A per-run movement register is the authoritative source (Phase 9B-8 Decision D) and it is not connected: ${movementRegisterLinkage.reason} ${movementIds.present}/${movementIds.total} trains carry a movementId that differs from its trainId. The register contract (TrainMovementRecord) requires movementId, trainId, runIdentity, runDate, corridorId, section, departure, arrival and direction, and validateTrainMovementRecord refuses any record whose movementId equals its trainId. No trainId is accepted in its place, no fallback is implemented, and a populated id is never taken as evidence of a register: provenance is not inferred from the field being filled in.`,
       resolvableByUserAction: false,
       coverage: movementIds,
     },
@@ -994,7 +1237,7 @@ export function assessModule4Readiness(
         resourceTypes.total > 0 && ratio(resourceTypes) === 1
           ? MAPPED_SOURCE
           : UNAVAILABLE_SOURCE,
-      reason: `Module 3 resource_type (${MODULE_3_RESOURCE_TYPES.join(' | ')}) and Module 4 ResourceType (${MODULE_4_RESOURCE_TYPES.join(' | ')}) have ZERO overlapping values, so the enum correspondence is undecided and stays unresolved. Resource.module3ResourceType records that decision explicitly and is populated on ${resourceTypes.present}/${resourceTypes.total} resources; resourceType is never coerced.`,
+      reason: `Module 3 resource_type (${MODULE_3_RESOURCE_TYPES.join(' | ')}) and Module 4 ResourceType (${MODULE_4_RESOURCE_TYPES.join(' | ')}) have ZERO overlapping values, so the correspondence must be decided. Phase 9B-8 Decision C approved the MECHANISM - an explicit, versioned mapping table whose version is currently ${RESOURCE_TYPE_MAPPING_VERSION} and which contains no entries - and explicitly approved no mapping values. ${resourceTypes.present}/${resourceTypes.total} resources therefore resolve. Nothing is coerced: not by name similarity (TRACK_MACHINE contains MACHINERY), not by substring, and not by falling back to MANPOWER or MACHINERY.${resourceConflicts.length > 0 ? ` ${resourceConflicts.length} resource(s) record a module3ResourceType that contradicts the approved table and are reported rather than overridden.` : ''}`,
       resolvableByUserAction: false,
       coverage: resourceTypes,
     },
@@ -1022,12 +1265,21 @@ export function assessModule4Readiness(
     },
     {
       ...byId('corridors.sections'),
-      status: statusFor(corridorSections),
+      status:
+        corridorSections.total === 0
+          ? statusFor(corridorSections)
+          : corridorTopologyLinkage.ok && statusFor(corridorSections) === 'AVAILABLE'
+            ? 'AVAILABLE'
+            : 'UNAVAILABLE',
       source:
-        corridorSections.total > 0 && ratio(corridorSections) === 1
+        corridorSections.total > 0 &&
+        ratio(corridorSections) === 1 &&
+        corridorTopologyLinkage.ok
           ? MAPPED_SOURCE
           : UNAVAILABLE_SOURCE,
-      reason: `Corridor.sections lists the full extent of a corridor, which Module 3 requires (its own demo corridors span 2-3 sections) while Module 4 declares a single sectionId. ${corridorSections.present}/${corridorSections.total} corridors carry a list. Topology is never back-filled from sectionId or from a corridor id, so the remainder stays unavailable.`,
+      reason: corridorTopologyLinkage.ok
+        ? `${corridorTopologyLinkage.reason} Corridor.sections lists the ordered extent of a route, which Module 3 requires (its own demo corridors span 2-3 sections) while Module 4 declares a single sectionId. ${corridorSections.present}/${corridorSections.total} corridors carry a valid ordered list: no blank entry, no repeat, and never a single-element [sectionId] restatement.`
+        : `Corridor.sections lists the ordered extent of a route, which Module 3 requires (its own demo corridors span 2-3 sections) while Module 4 declares a single sectionId. ${corridorSections.present}/${corridorSections.total} corridors carry a structurally valid ordered list, which is necessary but not sufficient: ${corridorTopologyLinkage.reason} Phase 9B-8 Decision E requires an authoritative topology source (CorridorTopologyRecord: corridorId, orderedSectionIds, direction, effective/version metadata). An array of strings is not a survey — any caller can type one, so provenance is never inferred from the array being populated. Topology is never back-filled from sectionId or from a corridor id, and a single-element [sectionId] is refused rather than counted: that is the shape a back-fill produces, and ${restatedSectionCount} corridor(s) currently hold exactly that.`,
       resolvableByUserAction: false,
       coverage: corridorSections,
     },

@@ -15,6 +15,7 @@ import {
   mockBlockRequests,
   mockCorridors,
   mockGoodsForecasts,
+  mockIntegratedBlocks,
   mockMaintenanceTasks,
   mockResources,
   mockTrains,
@@ -27,6 +28,7 @@ import {
   setPlannerTasks,
 } from '@/utils/plannerScope';
 import type { ExistingOccupancy } from '@/types/occupancy';
+import { withDecisionsApplied } from './decidedWorldFixture';
 
 const CORRIDOR = mockCorridors[0];
 const CORRIDOR_ID = CORRIDOR.corridorId;
@@ -53,44 +55,37 @@ function blockedSnapshot(): Module4ReadinessSnapshot {
 }
 
 /**
- * The same world with every declared Module 3 field populated, which is the only
- * way to reach the success path. These values are test fixtures standing in for
- * data Module 4 does not have yet - they are never written into src/mocks.
+ * The same world with all five Phase 9B-8 decisions MADE, which is the only way
+ * to reach the success path. Every value here is a test fixture standing in for
+ * data Module 4 does not have yet - nothing is written into src/mocks.
+ *
+ * Phase 9B-8 changed what "complete" means, so this fixture changed with it:
+ *   - a priority is authoritative only once a human CONFIRMED it;
+ *   - a block request is a REQUEST, so the block requests still carry no
+ *     occupancyType here and a granted possession is supplied instead;
+ *   - a resource type needs an APPROVED MAPPING, not a value set on the record;
+ *   - `sections` must be a survey, so it is not a restatement of sectionId.
  */
 function readySnapshot(): Module4ReadinessSnapshot {
   const base = blockedSnapshot();
-  const tasks = base.tasks.map((task) => ({
+  const decided = withDecisionsApplied(base);
+  const tasks = decided.tasks.map((task) => ({
     ...task,
-    corridorId: CORRIDOR_ID,
-    priority: 'HIGH' as const,
     module3WorkType: 'PREVENTIVE' as const,
     dueBy: '2026-01-20',
   }));
   const scope = setPlannerTasks(base.scope, [tasks[0].taskId], tasks);
   return {
-    ...base,
+    ...decided,
     tasks,
     scope,
     blockRequests: base.blockRequests.map((r) => ({
       ...r,
       corridorId: CORRIDOR_ID,
-      occupancyType: 'TRAFFIC_BLOCK' as const,
+      // Deliberately NOT an occupancyType: a request is not a grant. The
+      // possession records supplied by withDecisionsApplied are what satisfy
+      // `request.occupancy_type`.
     })),
-    assets: base.assets.map((a) => ({ ...a, corridorId: CORRIDOR_ID, assetType: 'TRACK' })),
-    corridors: base.corridors.map((c) => ({
-      ...c,
-      name: `Test Corridor ${c.corridorId}`,
-      sections: [c.sectionId],
-    })),
-    trains: base.trains.map((t, i) => ({ ...t, corridorId: CORRIDOR_ID, movementId: `MOV-${i}` })),
-    goodsForecasts: base.goodsForecasts.map((g) => ({
-      ...g,
-      corridorId: CORRIDOR_ID,
-      windowStart: '22:00:00',
-      windowEnd: '23:30:00',
-      volumeTonnes: 800,
-    })),
-    resources: base.resources.map((r) => ({ ...r, module3ResourceType: 'MANPOWER' as const })),
     recommendations: base.recommendations.map((r) => ({
       ...r,
       taskId: tasks[0].taskId,
@@ -237,10 +232,22 @@ describe('the builder emits only verified, in-scope records', () => {
   });
 
   it('does not put IntegratedBlocks into existing_blocks', () => {
-    const snapshot = readySnapshot();
-    const result = buildOptimizeRequest({ ...snapshot, occupancies: [] });
+    // Phase 9B-8 Decision B: the granted possession records stay, because
+    // emptying them now blocks the request for a second, unrelated reason
+    // (`request.occupancy_type` is answered by the possession system alone).
+    // The IntegratedBlocks are what this test is about, so they are added rather
+    // than used to starve the snapshot.
+    const result = buildOptimizeRequest({
+      ...readySnapshot(),
+      integratedBlocks: mockIntegratedBlocks,
+    });
     if (!result.ok) throw new Error('expected success');
-    expect(result.request.context?.existing_blocks ?? []).toEqual([]);
+    const blocks = result.request.context?.existing_blocks as { block_id: string }[];
+    // Every emitted block came from a granted possession, never a proposal.
+    expect(blocks.map((b) => b.block_id)).not.toContain(mockIntegratedBlocks[0].blockId);
+    for (const block of mockIntegratedBlocks) {
+      expect(blocks.map((b) => b.block_id)).not.toContain(block.blockId);
+    }
   });
 
   it('emits granted occupancy when it exists', () => {
@@ -254,12 +261,17 @@ describe('the builder emits only verified, in-scope records', () => {
       occupancyType: 'TRAFFIC_BLOCK',
       relatedTaskIds: [],
     };
-    const result = buildOptimizeRequest({ ...readySnapshot(), occupancies: [occupancy] });
+    // Kept alongside the per-task possession records Decision B requires, since
+    // this one names no task and therefore grants no request's occupancy type.
+    const result = buildOptimizeRequest({
+      ...readySnapshot(),
+      occupancies: [...readySnapshot().occupancies, occupancy],
+    });
     if (!result.ok) throw new Error('expected success');
     const blocks = result.request.context?.existing_blocks as Record<string, unknown>[];
-    expect(blocks).toHaveLength(1);
-    expect(blocks[0].block_id).toBe('OCC-001');
-    expect(blocks[0].status).toBe('APPROVED');
+    expect(blocks.map((b) => b.block_id)).toContain('OCC-001');
+    const emitted = blocks.find((b) => b.block_id === 'OCC-001');
+    expect(emitted?.status).toBe('APPROVED');
   });
 
   it('records provenance for what it emitted and what it withheld', () => {

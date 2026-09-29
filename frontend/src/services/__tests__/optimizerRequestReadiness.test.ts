@@ -23,10 +23,18 @@ import {
   assessModule4Readiness,
   assessSyntheticDemoReadiness,
   deriveReadinessState,
+  INTEGRATION_COMPLETENESS_GATES,
   type Module4ReadinessSnapshot,
   type OptimizerReadinessInput,
   type OptimizerRequestReadiness,
 } from '@/services/optimizerRequestReadiness';
+import { confirmTaskPriority } from '@/services/taskPriorityDecision';
+import {
+  TEST_ONLY_CORRIDOR_TOPOLOGY_LINKAGE,
+  TEST_ONLY_MOVEMENT_REGISTER_LINKAGE,
+  TEST_ONLY_RESOURCE_TYPE_MAPPINGS,
+  withDecisionsApplied,
+} from './decidedWorldFixture';
 
 const CORRIDOR_ID = mockCorridors[0].corridorId;
 
@@ -202,8 +210,13 @@ describe('Module 4 data with no corridor selected', () => {
   it('reports the missing movementId as an unpopulated domain field', () => {
     const input = inputOf(readiness, 'trains.movement_id');
     expect(input.status).toBe('UNAVAILABLE');
-    expect(input.reason).toContain('movementId is populated on 0/');
+    // Phase 9B-8 Decision D: the per-run movement register is the authoritative
+    // source and it is not connected, so the reason names the missing SOURCE
+    // rather than describing a field a user could type in.
+    expect(input.reason).toContain('per-run movement register is the authoritative source');
+    expect(input.reason).toContain(`0/${mockTrains.length} trains carry a movementId`);
     expect(input.reason).toContain('trainId');
+    expect(input.reason).toContain('no fallback is implemented');
     expect(input.coverage).toEqual({ present: 0, total: mockTrains.length });
     expect(input.resolvableByUserAction).toBe(false);
   });
@@ -252,7 +265,10 @@ describe('Module 4 data with no corridor selected', () => {
     expect(input.reason).toContain('ZERO overlapping values');
     expect(input.reason).toContain('MANPOWER');
     expect(input.reason).toContain('MAINTENANCE_CREW');
-    expect(input.reason).toContain('never coerced');
+    // Phase 9B-8 Decision C approved the mechanism and no mapping values, so the
+    // table is empty and nothing may be coerced into it.
+    expect(input.reason).toContain('Nothing is coerced');
+    expect(input.reason).toContain('contains no entries');
     expect(input.resolvableByUserAction).toBe(false);
   });
 
@@ -462,10 +478,11 @@ describe('Module 4 data with no corridor selected', () => {
     }
   });
 
-  it('maps provenance exactly when a collection becomes fully covered', () => {
+  it('maps provenance exactly when a collection becomes fully covered AND its source is linked', () => {
     const populated = assessModule4Readiness({
       ...snapshotWith(),
       trains: mockTrains.map((t, i) => ({ ...t, movementId: `MVT-${i}` })),
+      movementRegisterLinkage: TEST_ONLY_MOVEMENT_REGISTER_LINKAGE,
     });
     const input = inputOf(populated, 'trains.movement_id');
     expect(input.status).toBe('AVAILABLE');
@@ -534,31 +551,72 @@ describe('coverage is derived from the data, not asserted', () => {
     });
   });
 
-  it('recognises an explicit movementId on every train', () => {
-    const readiness = assessModule4Readiness({
+  it('counts a movementId on every train, but does not call it available without a register', () => {
+    const valuesOnly = assessModule4Readiness({
       ...snapshotWith(),
       trains: mockTrains.map((t, i) => ({ ...t, movementId: `MVT-${i + 1}` })),
     });
-    const input = inputOf(readiness, 'trains.movement_id');
-    expect(input.status).toBe('AVAILABLE');
-    expect(input.source).toBe('MAPPED_FROM_MODULE_4');
-    expect(input.coverage).toEqual({ present: mockTrains.length, total: mockTrains.length });
+    const counted = inputOf(valuesOnly, 'trains.movement_id');
+    // Coverage is still measured honestly from the data...
+    expect(counted.coverage).toEqual({ present: mockTrains.length, total: mockTrains.length });
+    // ...but full coverage is not a register, so the input stays UNAVAILABLE.
+    expect(counted.status).toBe('UNAVAILABLE');
+    expect(counted.source).toBe('UNAVAILABLE_FROM_MODULE_4');
+    expect(counted.resolvableByUserAction).toBe(false);
+
+    const withRegister = assessModule4Readiness({
+      ...snapshotWith(),
+      trains: mockTrains.map((t, i) => ({ ...t, movementId: `MVT-${i + 1}` })),
+      movementRegisterLinkage: TEST_ONLY_MOVEMENT_REGISTER_LINKAGE,
+    });
+    const linked = inputOf(withRegister, 'trains.movement_id');
+    expect(linked.status).toBe('AVAILABLE');
+    expect(linked.source).toBe('MAPPED_FROM_MODULE_4');
+    expect(linked.coverage).toEqual({ present: mockTrains.length, total: mockTrains.length });
   });
 
-  it('recognises a section list on every corridor', () => {
-    const readiness = assessModule4Readiness({
+  it('counts a section list on every corridor, but does not call it available without a survey', () => {
+    const valuesOnly = assessModule4Readiness({
       ...snapshotWith(),
       corridors: mockCorridors.map((c) => ({ ...c, sections: [c.sectionId, `${c.sectionId}-B`] })),
     });
-    const input = inputOf(readiness, 'corridors.sections');
-    expect(input.status).toBe('AVAILABLE');
-    expect(input.coverage).toEqual({ present: mockCorridors.length, total: mockCorridors.length });
+    const counted = inputOf(valuesOnly, 'corridors.sections');
+    // Two strings are a structurally valid list, and that is measured honestly...
+    expect(counted.coverage).toEqual({ present: mockCorridors.length, total: mockCorridors.length });
+    // ...but an array anyone can type is not a survey.
+    expect(counted.status).toBe('UNAVAILABLE');
+    expect(counted.source).toBe('UNAVAILABLE_FROM_MODULE_4');
+    expect(counted.resolvableByUserAction).toBe(false);
+
+    const withSurvey = assessModule4Readiness({
+      ...snapshotWith(),
+      corridors: mockCorridors.map((c) => ({ ...c, sections: [c.sectionId, `${c.sectionId}-B`] })),
+      corridorTopologyLinkage: TEST_ONLY_CORRIDOR_TOPOLOGY_LINKAGE,
+    });
+    const linked = inputOf(withSurvey, 'corridors.sections');
+    expect(linked.status).toBe('AVAILABLE');
+    expect(linked.source).toBe('MAPPED_FROM_MODULE_4');
+    expect(linked.coverage).toEqual({ present: mockCorridors.length, total: mockCorridors.length });
   });
 
-  it('resolves the resource mapping only once every resource carries it explicitly', () => {
+  it('does NOT resolve the resource mapping from a per-record module3ResourceType', () => {
+    // Phase 9B-8 Decision C changed this. A value set on an individual record used
+    // to be enough; it no longer is. Honouring it would let the table be bypassed
+    // record by record, which is the mapping layer Decision C exists to prevent.
     const readiness = assessModule4Readiness({
       ...snapshotWith(),
       resources: mockResources.map((r) => ({ ...r, module3ResourceType: 'MANPOWER' as const })),
+    });
+    const input = inputOf(readiness, 'resources.resource_type');
+    expect(input.status).toBe('UNRESOLVED');
+    expect(input.coverage).toEqual({ present: 0, total: mockResources.length });
+    expect(input.reason).toContain('no mapping values');
+  });
+
+  it('resolves the resource mapping only from an APPROVED mapping table', () => {
+    const readiness = assessModule4Readiness({
+      ...snapshotWith(),
+      resourceTypeMappings: TEST_ONLY_RESOURCE_TYPE_MAPPINGS,
     });
     const input = inputOf(readiness, 'resources.resource_type');
     expect(input.status).toBe('AVAILABLE');
@@ -569,24 +627,51 @@ describe('coverage is derived from the data, not asserted', () => {
     });
   });
 
-  it('leaves the resource mapping unresolved while any resource lacks it', () => {
-    const [first, ...rest] = mockResources;
+  it('leaves the resource mapping unresolved while any Module 4 type is unmapped', () => {
+    // A partial table is partial. `TRACK_MACHINE` is dropped, so every resource
+    // of that type is unresolved even though the other five resolve.
+    const withoutTrackMachine = TEST_ONLY_RESOURCE_TYPE_MAPPINGS.filter(
+      (m) => m.module4ResourceType !== 'TRACK_MACHINE',
+    );
     const readiness = assessModule4Readiness({
       ...snapshotWith(),
-      resources: [{ ...first, module3ResourceType: 'MANPOWER' as const }, ...rest],
+      resourceTypeMappings: withoutTrackMachine,
     });
     const input = inputOf(readiness, 'resources.resource_type');
     expect(input.status).toBe('UNRESOLVED');
-    expect(input.coverage).toEqual({ present: 1, total: rest.length + 1 });
+    const trackMachines = mockResources.filter((r) => r.resourceType === 'TRACK_MACHINE');
+    expect(input.coverage).toEqual({
+      present: mockResources.length - trackMachines.length,
+      total: mockResources.length,
+    });
   });
 
-  it('recognises explicit task priority and never derives it', () => {
+  it('does NOT recognise a bare task priority as authoritative', () => {
+    // Decision A: a priority value with nobody on record as having decided it is
+    // not a decision, so it does not satisfy the gate.
     const readiness = assessModule4Readiness({
       ...snapshotWith(),
       tasks: mockMaintenanceTasks.map((t, i) => ({
         ...t,
         priority: (['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as const)[i % 4],
       })),
+    });
+    const input = inputOf(readiness, 'tasks.priority');
+    expect(input.status).toBe('UNAVAILABLE');
+    expect(input.coverage).toEqual({ present: 0, total: mockMaintenanceTasks.length });
+    expect(input.reason).toContain('no confirmation');
+  });
+
+  it('recognises a human-CONFIRMED task priority and never derives it', () => {
+    const readiness = assessModule4Readiness({
+      ...snapshotWith(),
+      tasks: mockMaintenanceTasks.map((t, i) =>
+        confirmTaskPriority(t, {
+          priority: (['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as const)[i % 4],
+          confirmedBy: 'test-planner',
+          confirmedAt: '2026-01-15T09:00:00Z',
+        }),
+      ),
     });
     const input = inputOf(readiness, 'tasks.priority');
     expect(input.status).toBe('AVAILABLE');
@@ -1080,6 +1165,91 @@ describe('only granted possession satisfies existing occupancy', () => {
   });
 });
 
+// ── Approved possession is a separate integration-completeness gate ───────────
+
+describe('approved possession stays a separate gate after readiness is READY', () => {
+  /** A world in which all five Phase 9B-8 decisions have been ANSWERED. */
+  function decidedSnapshot(): Module4ReadinessSnapshot {
+    const base = snapshotWith(
+      setPlannerTasks(
+        selectPlannerCorridor(INITIAL_PLANNER_SCOPE, CORRIDOR_ID, mockCorridors),
+        [mockMaintenanceTasks[0].taskId],
+        mockMaintenanceTasks,
+      ),
+    );
+    return withDecisionsApplied({
+      ...base,
+      tasks: base.tasks.map((task) => ({
+        ...task,
+        module3WorkType: 'PREVENTIVE' as const,
+        dueBy: '2026-01-20',
+      })),
+    });
+  }
+
+  it('names approved possession as an integration-completeness gate', () => {
+    expect(INTEGRATION_COMPLETENESS_GATES).toContain('existing_blocks.approved_source');
+  });
+
+  it('is reported as unsatisfied on the real mock world, without blocking it', () => {
+    const readiness = assessModule4Readiness(snapshotWith());
+    const gate = readiness.integrationGates.find(
+      (g) => g.id === 'existing_blocks.approved_source',
+    );
+    expect(gate).toBeDefined();
+    // `status` is AVAILABLE because Module 3 accepts an empty existing_blocks
+    // list. The gate is nonetheless outstanding, because nothing is telling us
+    // what is on the network.
+    expect(gate?.status).toBe('AVAILABLE');
+    expect(gate?.source).toBe('UNAVAILABLE_FROM_MODULE_4');
+    expect(gate?.reason).toContain('no possession source feeds it');
+    // Non-blocking: Module 3 accepts an empty existing_blocks list.
+    expect(gate?.blocking).toBe(false);
+    expect(readiness.blocking.map((b) => b.id)).not.toContain('existing_blocks.approved_source');
+  });
+
+  it('still reports the gate once every other input is satisfied', () => {
+    const decided = decidedSnapshot();
+    // The possession records exist here, so this world is complete. With them
+    // removed, everything else still passes and the gate is all that is left.
+    const withPossession = assessModule4Readiness(decided);
+    expect(withPossession.integrationGates).toEqual([]);
+
+    const withoutPossession = assessModule4Readiness({ ...decided, occupancies: [] });
+    const gate = withoutPossession.integrationGates.find(
+      (g) => g.id === 'existing_blocks.approved_source',
+    );
+    expect(gate).toBeDefined();
+    expect(gate?.reason).toContain('no possession source feeds it');
+  });
+
+  it('never lets a non-gate input appear in integrationGates', () => {
+    const readiness = assessModule4Readiness(snapshotWith());
+    for (const gate of readiness.integrationGates) {
+      expect(INTEGRATION_COMPLETENESS_GATES).toContain(gate.id);
+    }
+    // The five decision blockers are blockers, not gates.
+    const gateIds = readiness.integrationGates.map((g) => g.id);
+    for (const blocker of [
+      'tasks.priority',
+      'request.occupancy_type',
+      'resources.resource_type',
+      'trains.movement_id',
+      'corridors.sections',
+    ]) {
+      expect(gateIds, blocker).not.toContain(blocker);
+    }
+  });
+
+  it('leaves the gate visible in the synthetic path too, and satisfied', () => {
+    // The synthetic demo world supplies its own existing blocks, so the gate is
+    // met and must not be reported as outstanding.
+    const readiness = assessSyntheticDemoReadiness();
+    expect(readiness.state).toBe('READY');
+    expect(readiness.integrationGates).toEqual([]);
+  });
+});
+
 // ── Nothing is derived ────────────────────────────────────────────────────────
 
 describe('no Module 4 axis is converted into a Module 3 one', () => {
@@ -1105,7 +1275,7 @@ describe('no Module 4 axis is converted into a Module 3 one', () => {
     const readiness = assessModule4Readiness(snapshotWith());
     const input = inputOf(readiness, 'resources.resource_type');
     expect(input.coverage).toEqual({ present: 0, total: mockResources.length });
-    expect(input.reason).toContain('never coerced');
+    expect(input.reason).toContain('Nothing is coerced');
   });
 
   it('derives no goods window from expectedTime and no tonnage from probability', () => {

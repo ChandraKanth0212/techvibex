@@ -55,3 +55,80 @@ export interface ExistingOccupancy {
   /** Tasks this possession was granted for. May be empty, never inferred. */
   relatedTaskIds: string[];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 9B-8, Decision B: the possession/grant system is authoritative.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The single system entitled to state what kind of occupancy exists.
+ *
+ * Phase 9B-7 left this owner unconfirmed. It is now decided, and the decision
+ * has a consequence that is easy to get wrong: a request is not a grant.
+ * `BlockRequest.occupancyType` records what a planner ASKED for; only a granted
+ * {@link ExistingOccupancy} states what was actually granted.
+ */
+export const OCCUPANCY_AUTHORITY = 'POSSESSION_GRANT_SYSTEM' as const;
+export type OccupancyAuthority = typeof OCCUPANCY_AUTHORITY;
+
+/**
+ * A REQUESTED occupancy: an intention, recorded by the requesting side.
+ *
+ * Kept as its own type, and structurally incapable of standing in for a grant:
+ * it carries no `status`, no `occupancyId` and no `startTime`/`endTime`, so it
+ * cannot be passed where an {@link ExistingOccupancy} is required.
+ */
+export interface RequestedOccupancy {
+  readonly assertion: 'REQUESTED';
+  /** The `BlockRequest.requestId` that asked for this. */
+  readonly requestId: string;
+  /** What the requester asked for. NOT authoritative. */
+  readonly requestedOccupancyType?: OptimizerOccupancyType;
+  /**
+   * Always the requester. Present so that a consumer can see WHO asserted this
+   * without having to infer it from the absence of a status field.
+   */
+  readonly assertedBy: 'PLANNER_REQUEST';
+}
+
+/**
+ * A GRANTED occupancy: what the possession system actually granted.
+ *
+ * Structurally an {@link ExistingOccupancy}, so it is the one thing that can
+ * satisfy Module 3 `request.occupancy_type`, and only while its status is
+ * {@link GRANTED_OCCUPANCY_STATUSES}.
+ */
+export interface GrantedOccupancy {
+  readonly assertion: 'GRANTED';
+  readonly occupancy: ExistingOccupancy;
+  readonly authority: OccupancyAuthority;
+}
+
+/**
+ * Either side of the distinction, so a caller cannot hold "an occupancy" without
+ * saying which kind it is.
+ */
+export type OccupancyAssertion = RequestedOccupancy | GrantedOccupancy;
+
+/**
+ * Why a candidate is not a source of granted possession.
+ *
+ * Every value names a specific thing that was refused, because "not available"
+ * would hide the difference between a missing system, a wrong kind of record,
+ * and an empty answer that merely looks like success.
+ */
+export type PossessionSourceRejection =
+  /** An `IntegratedBlock`: a planning artefact, even at status APPROVED. */
+  | 'INTEGRATED_BLOCK_IS_A_PLANNING_ARTEFACT'
+  /** `Corridor.availableWindows`: a capacity statement, not a possession. */
+  | 'AVAILABLE_WINDOW_IS_A_CAPACITY_STATEMENT'
+  /** An empty set, which is indistinguishable from "nothing was ever granted". */
+  | 'EMPTY_POSSESSION_SET_PROVES_NOTHING'
+  /** A `BlockRequest`: asking for possession is not holding it. */
+  | 'REQUEST_IS_NOT_A_GRANT'
+  /** A possession record whose status is not APPROVED or ACTIVE. */
+  | 'POSSESSION_NOT_YET_GRANTED'
+  /** A granted record missing a field Module 3 ExistingBlock requires. */
+  | 'POSSESSION_RECORD_INCOMPLETE'
+  /** `BlockType` (CORRIDOR/SHADOW/EMERGENCY/ROUTINE) is not a grant type. */
+  | 'MODULE_4_BLOCK_TYPE_IS_NOT_A_GRANT_TYPE';

@@ -270,6 +270,26 @@ describe('the diagnostic never fabricates', () => {
     expect(view.taskSelection.ids).toEqual([]);
     expect(render(view)).toContain('0 (none selected)');
   });
+
+  it('shows approved possession as an integration gate, and never as a blocker', async () => {
+    // Phase 9B-8: Module 3 accepts an empty existing_blocks list, so an absent
+    // possession source is not a blocker. It must still be visible, because
+    // "the network is clear" and "nobody is telling us" are different states.
+    enableOptimizer();
+    const result = await optimizerService.generatePlanFromModule4(blockedSnapshot());
+    if (result.kind !== 'BLOCKED') throw new Error('expected BLOCKED');
+    const view = buildDiagnosticsView(result, { optimizerEnabled: true, selectedTaskIds: [] });
+    const html = render(view);
+
+    expect(view.integrationGates.map((g) => g.id)).toContain('existing_blocks.approved_source');
+    expect(view.blockerCount).toBeGreaterThan(0);
+    // The gate is reported, and explicitly labelled as not blocking.
+    expect(html).toContain('readiness-integration-gates');
+    expect(html).toContain('integration completeness');
+    expect(html).toContain('not blocking');
+    // It is not smuggled into the blocker list.
+    expect(result.blockers.map((b) => b.id)).not.toContain('existing_blocks.approved_source');
+  });
 });
 
 describe('the diagnostic reports the selected scope accurately', () => {
@@ -322,6 +342,7 @@ describe('provenance is reported, and synthetic stays visibly synthetic', () => 
         },
         inputs: [],
         blocking: [],
+        integrationGates: [],
         warnings: [],
         unresolvedMappings: [],
         summary: {
@@ -381,6 +402,7 @@ describe('a constructable request keeps the real action available', () => {
         scope: { corridorId: CORRIDOR_ID, sectionId: CORRIDOR.sectionId, source: 'MAPPED_FROM_MODULE_4' },
         inputs: [],
         blocking: [],
+        integrationGates: [],
         warnings: [],
         unresolvedMappings: [],
         summary: { total: 1, available: 1, partial: 0, unavailable: 0, unresolved: 0, excluded: 0, blocking: 0 },
@@ -412,6 +434,7 @@ describe('a constructable request keeps the real action available', () => {
         scope: { corridorId: CORRIDOR_ID, sectionId: null, source: 'MAPPED_FROM_MODULE_4' },
         inputs: [],
         blocking: [],
+        integrationGates: [],
         warnings: [],
         unresolvedMappings: [],
         summary: { total: 1, available: 1, partial: 0, unavailable: 0, unresolved: 0, excluded: 0, blocking: 0 },
@@ -435,6 +458,7 @@ describe('a constructable request keeps the real action available', () => {
         scope: { corridorId: CORRIDOR_ID, sectionId: null, source: 'MAPPED_FROM_MODULE_4' },
         inputs: [],
         blocking: [],
+        integrationGates: [],
         warnings: [],
         unresolvedMappings: [],
         summary: { total: 1, available: 1, partial: 0, unavailable: 0, unresolved: 0, excluded: 0, blocking: 0 },

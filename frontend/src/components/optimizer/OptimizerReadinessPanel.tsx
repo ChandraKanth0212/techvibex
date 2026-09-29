@@ -345,6 +345,30 @@ export const OptimizerReadinessPanel: React.FC<{
           </div>
         )}
 
+        {view.integrationGates.length > 0 && (
+          <div
+            data-testid="readiness-integration-gates"
+            className="p-2.5 rounded border border-amber-500/30 bg-amber-500/5"
+          >
+            <p className="text-[9px] text-amber-400/80 uppercase tracking-wide font-mono mb-1">
+              integration completeness — not blocking
+            </p>
+            <p className="text-[10px] font-mono text-amber-200/70 leading-relaxed mb-1.5">
+              These do not stop a request from being built: Module 3 accepts the
+              request without them. They record that a source Module 4 would need
+              in order to be complete is not connected.
+            </p>
+            <ul className="space-y-1">
+              {view.integrationGates.map((gate) => (
+                <li key={gate.id} className="text-[10px] font-mono">
+                  <span className="text-amber-200">{gate.field}</span>
+                  <span className="text-amber-200/50"> — {gate.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {view.warnings.length > 0 && (
           <div data-testid="readiness-warnings" className="p-2.5 rounded border border-amber-500/30 bg-amber-500/5">
             <p className="text-[9px] text-amber-400/80 uppercase tracking-wide font-mono mb-1">

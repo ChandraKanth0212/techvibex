@@ -14,6 +14,23 @@ export type ResourceType =
   | 'INSPECTION_TEAM'
   | 'VEHICLE';
 
+/**
+ * Module 4 `ResourceType` as a runtime tuple.
+ *
+ * Zero overlap with Module 3's `OptimizerResourceType`, which is the whole
+ * reason Decision C needs an explicit mapping layer. Single source: readiness
+ * and the mapping layer both read this rather than keeping copies that could
+ * drift.
+ */
+export const MODULE_4_RESOURCE_TYPES = [
+  'TRACK_MACHINE',
+  'MAINTENANCE_CREW',
+  'SIGNAL_CREW',
+  'OHE_CREW',
+  'INSPECTION_TEAM',
+  'VEHICLE',
+] as const satisfies readonly ResourceType[];
+
 export type ResourceStatus = 'AVAILABLE' | 'ALLOCATED' | 'MAINTENANCE' | 'OFF_DUTY';
 
 export interface ResourceAvailabilityWindow {
@@ -45,4 +62,39 @@ export interface Resource {
   availabilityWindows: ResourceAvailabilityWindow[];
   currentLocation: string;
   status: ResourceStatus;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 9B-8, Decision C: an explicit, versioned mapping layer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Who approved a resource-type correspondence, and when.
+ *
+ * A mapping without this is not a mapping; it is a guess with a table around it.
+ * `reference` is the decision record (ticket, minute, approval note) so the
+ * mapping can be audited or withdrawn later.
+ */
+export interface ResourceTypeMappingApproval {
+  readonly approvedBy: string;
+  /** ISO datetime string. */
+  readonly approvedAt: string;
+  readonly reference: string;
+}
+
+/**
+ * ONE approved correspondence, in the version of the table that approved it.
+ *
+ * The Module 4 vocabulary is kept as-is and the Module 3 vocabulary is reached
+ * only through an entry here. Nothing coerces between the two enums: the two
+ * share zero values, and no amount of string similarity decides a scheduling
+ * resource's type. `mappingVersion` is part of the entry rather than a property
+ * of the table, so a record of what was decided cannot be separated from which
+ * decision it belonged to.
+ */
+export interface ResourceTypeMapping {
+  readonly module4ResourceType: ResourceType;
+  readonly module3ResourceType: OptimizerResourceType;
+  readonly mappingVersion: string;
+  readonly approval: ResourceTypeMappingApproval;
 }

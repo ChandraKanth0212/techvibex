@@ -176,6 +176,17 @@ export interface OptimizerDiagnosticsView {
   }[];
   /** Exact `readiness.warnings` text; empty when the engine reported none. */
   readonly warnings: readonly string[];
+  /**
+   * Outstanding integration-completeness gates: sources Module 4 would need to
+   * be complete but which do not stop a request being built. Approved possession
+   * is the one that exists today. Non-empty alongside `state: 'READY'` is the
+   * intended case — the request is buildable while a source is unconnected.
+   */
+  readonly integrationGates: readonly {
+    readonly id: string;
+    readonly field: string;
+    readonly reason: string;
+  }[];
 }
 
 export interface DiagnosticsOptions {
@@ -236,5 +247,10 @@ export function buildDiagnosticsView(
     emitted: result.kind === 'PLAN' ? result.emitted : [],
     omitted: result.kind === 'PLAN' ? result.omitted : [],
     warnings: readiness.warnings,
+    integrationGates: readiness.integrationGates.map((gate) => ({
+      id: gate.id,
+      field: gate.field,
+      reason: gate.reason,
+    })),
   };
 }

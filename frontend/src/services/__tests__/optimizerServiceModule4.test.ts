@@ -41,6 +41,7 @@ import {
   mockTrains,
 } from '@/mocks';
 import { PLAN_RESPONSE, clonePlan } from './optimizerFixtures';
+import { withDecisionsApplied } from './decidedWorldFixture';
 
 const CORRIDOR = mockCorridors[0];
 const CORRIDOR_ID = CORRIDOR.corridorId;
@@ -101,46 +102,43 @@ function blockedSnapshot(): Module4ReadinessSnapshot {
   };
 }
 
-/** The same world with every declared Module 3 field present (test-only values). */
+/**
+ * The same world with all five Phase 9B-8 decisions ANSWERED.
+ *
+ * Phase 9B-6 used to reach READY by setting fields directly on the records. The
+ * approved decisions rule out every one of those shortcuts, so the success path
+ * is now only reachable through the decision contracts:
+ *   A a CONFIRMED priority (not a bare `priority`, not an AI recommendation)
+ *   B a GRANTED possession (not `BlockRequest.occupancyType`, not `blockType`)
+ *   C an approved mapping table (not a per-record `module3ResourceType`)
+ *   D a `movementId` that is its own identity
+ *   E a section list that is not a restatement of `sectionId`
+ *
+ * The two values that were NOT one of the five decisions — `module3WorkType`,
+ * `dueBy` and the forecast window/volume — are still stated explicitly, because
+ * Module 3 declares no default for any of them.
+ */
 function readySnapshot(): Module4ReadinessSnapshot {
   const base = blockedSnapshot();
-  const tasks = base.tasks.map((task) => ({
-    ...task,
-    corridorId: CORRIDOR_ID,
-    priority: 'HIGH' as const,
-    module3WorkType: 'PREVENTIVE' as const,
-    dueBy: '2026-01-20',
-  }));
-  return {
+  const decided = withDecisionsApplied({
     ...base,
-    tasks,
-    scope: setPlannerTasks(base.scope, [tasks[0].taskId], tasks),
-    blockRequests: base.blockRequests.map((r) => ({
-      ...r,
+    tasks: base.tasks.map((task) => ({
+      ...task,
       corridorId: CORRIDOR_ID,
-      occupancyType: 'TRAFFIC_BLOCK' as const,
+      module3WorkType: 'PREVENTIVE' as const,
+      dueBy: '2026-01-20',
     })),
-    assets: base.assets.map((a) => ({ ...a, corridorId: CORRIDOR_ID, assetType: 'TRACK' })),
-    corridors: base.corridors.map((c) => ({
-      ...c,
-      name: `Test Corridor ${c.corridorId}`,
-      sections: [c.sectionId],
-    })),
-    trains: base.trains.map((t, i) => ({ ...t, corridorId: CORRIDOR_ID, movementId: `MOV-${i}` })),
-    goodsForecasts: base.goodsForecasts.map((g) => ({
-      ...g,
-      corridorId: CORRIDOR_ID,
-      windowStart: '22:00:00',
-      windowEnd: '23:30:00',
-      volumeTonnes: 800,
-    })),
-    resources: base.resources.map((r) => ({ ...r, module3ResourceType: 'MANPOWER' as const })),
+    blockRequests: base.blockRequests.map((r) => ({ ...r, corridorId: CORRIDOR_ID })),
     recommendations: base.recommendations.map((r) => ({
       ...r,
-      taskId: tasks[0].taskId,
+      taskId: base.tasks[0].taskId,
       priorityScore: 90,
       recommendedPriority: 'URGENT' as const,
     })),
+  });
+  return {
+    ...decided,
+    scope: setPlannerTasks(decided.scope, [decided.tasks[0].taskId], decided.tasks),
   };
 }
 
@@ -210,13 +208,24 @@ describe('blocked construction never reaches the network', () => {
     const result = await optimizerService.generatePlanFromModule4(blockedSnapshot());
     if (result.kind !== 'BLOCKED') throw new Error('expected BLOCKED');
     const byId = new Map(result.blockers.map((b) => [b.id, b]));
-    // The remaining actionable blocker is the block grant type: an operator can
-    // record an explicit occupancyType on a request.
-    expect(byId.get('request.occupancy_type')?.resolvableByUserAction).toBe(true);
-    // The rest are not a data-entry action.
+    // Phase 9B-8 Decision A: a priority IS a human decision, so a person can
+    // resolve it. This is now the only blocker an operator can act on alone.
     expect(byId.get('tasks.priority')?.resolvableByUserAction).toBe(true);
-    expect(byId.get('resources.resource_type')?.resolvableByUserAction).toBe(false);
-    expect(byId.get('trains.movement_id')?.resolvableByUserAction).toBe(false);
+
+    // Decisions B, C, D and E all made their blockers LESS actionable, not more.
+    // None of these is a data-entry action inside this application:
+    //   B the possession system grants possession; a user cannot
+    //   C a mapping must be APPROVED; a user cannot
+    //   D a per-run register must be connected; a user cannot
+    //   E a survey must exist; a user cannot
+    for (const notActionable of [
+      'request.occupancy_type',
+      'resources.resource_type',
+      'trains.movement_id',
+      'corridors.sections',
+    ]) {
+      expect(byId.get(notActionable)?.resolvableByUserAction, notActionable).toBe(false);
+    }
     // The 9B-6 inputs are resolved and must no longer appear at all.
     for (const gone of [
       'tasks.work_type',

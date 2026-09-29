@@ -343,6 +343,19 @@ export interface ValidateRequestDTO {
 export type OptimizerPriorityLevel = 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 /**
+ * Module 3 `PriorityLevel` as a runtime tuple, for validating values that
+ * arrived untyped (a form field, a JSON payload). Single source for the
+ * vocabulary: readiness and the Phase 9B-8 priority decision both read it
+ * rather than keeping their own copies, which could drift apart.
+ */
+export const MODULE_3_TASK_PRIORITIES = [
+  'URGENT',
+  'HIGH',
+  'MEDIUM',
+  'LOW',
+] as const satisfies readonly OptimizerPriorityLevel[];
+
+/**
  * Module 3 `ResourceType`. Deliberately NOT interchangeable with Module 4
  * `ResourceType` (`@/types/resource`): the two sets share no value, so the only
  * legitimate way for a Module 4 resource to carry one is an explicit
@@ -376,6 +389,19 @@ export type OptimizerResourceType =
   | 'MANPOWER'
   | 'MATERIAL'
   | 'POSSESSION';
+
+/**
+ * Module 3 `ResourceType` as a runtime tuple, for validating mapping entries
+ * that arrived untyped. Single source for the vocabulary: readiness and the
+ * Phase 9B-8 mapping layer both read this rather than keeping copies.
+ */
+export const MODULE_3_RESOURCE_TYPES = [
+  'ENGINEERING_TRAIN',
+  'MACHINERY',
+  'MANPOWER',
+  'MATERIAL',
+  'POSSESSION',
+] as const satisfies readonly OptimizerResourceType[];
 
 /** Module 3 `OccupancyType` — what kind of possession is being held. */
 export type OptimizerOccupancyType = 'TRAFFIC_BLOCK' | 'POSSESSION' | 'SLOW_MOVEMENT';
