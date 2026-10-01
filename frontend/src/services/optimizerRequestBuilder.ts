@@ -65,9 +65,22 @@ import type { Asset } from '@/types/asset';
 import type { Corridor } from '@/types/corridor';
 import type { ExistingOccupancy } from '@/types/occupancy';
 import type { MaintenanceTask } from '@/types/maintenance';
-import type { Resource } from '@/types/resource';
+import type { Resource, ResourceTypeMapping } from '@/types/resource';
 import type { Train } from '@/types/train';
 import type { GoodsForecast } from '@/types/train';
+import type { OptimizerResourceType } from '@/types/optimizer';
+
+// The approved authority for `resource_type`. The builder reads it rather than
+// copying the Module 4 record's own claim, so the emitted value and the value the
+// readiness gate verified are the same value.
+import {
+  APPROVED_RESOURCE_TYPE_MAPPINGS,
+  resolveResourceModule3Type,
+} from '@/services/resourceTypeMapping';
+import type { ResourceMappingResult } from '@/services/resourceTypeMapping';
+
+/** The one `ResourceMappingResult` shape that carries a decided Module 3 type. */
+type MappedResourceType = Extract<ResourceMappingResult, { status: 'MAPPED' }>;
 
 /** Readiness input ids that must ALL be satisfied before a collection is emitted. */
 const COLLECTION_GATES: Readonly<Record<string, readonly string[]>> = {
@@ -207,10 +220,24 @@ function buildForecast(forecast: GoodsForecast): Record<string, unknown> {
   };
 }
 
-function buildResource(resource: Resource): Record<string, unknown> {
+/**
+ * Builds one resource entry from the value the approved mapping resolved to.
+ *
+ * The type is passed in rather than read off the record because
+ * `Resource.module3ResourceType` is the Module 4 record's own claim and is unset on
+ * every record Module 4 ships. Copying it would emit `resource_type: undefined` for
+ * every resource on a request the readiness gate had already accepted. The claim is
+ * still cross-checked — `resolveResourceModule3Type` reports a value that
+ * contradicts the approved table as a CONFLICT rather than overriding it — so the
+ * table remains the authority and the record cannot quietly disagree with it.
+ */
+function buildResource(
+  resource: Resource,
+  resourceType: OptimizerResourceType,
+): Record<string, unknown> {
   return {
     resource_id: resource.resourceId,
-    resource_type: resource.module3ResourceType,
+    resource_type: resourceType,
     name: resource.name,
   };
 }
@@ -381,9 +408,39 @@ export function buildOptimizeRequest(snapshot: Module4ReadinessSnapshot): Optimi
   if (emittedCollections.includes('goodsForecasts')) {
     context.goods_forecasts = forCorridor(snapshot.goodsForecasts, corridorId).map(buildForecast);
   }
-  if (emittedCollections.includes('resources')) {
-    context.resources = snapshot.resources.map(buildResource);
-  }
+if (emittedCollections.includes('resources')) {
+      const mappings: readonly ResourceTypeMapping[] =
+        snapshot.resourceTypeMappings ?? APPROVED_RESOURCE_TYPE_MAPPINGS;
+      const resolvedResources = snapshot.resources.map((resource) => ({
+        resource,
+        resolved: resolveResourceModule3Type(resource, mappings),
+      }));
+      const unresolvedResources = resolvedResources.filter((e) => e.resolved.status !== 'MAPPED');
+      /**
+       * The readiness gate already requires every resource to resolve, so this
+       * refuses only in the state where the two disagree. Emitting the record's own
+       * unverified claim instead would let a request carry a `resource_type` the
+       * gate never approved, which is the one thing the approved table exists to stop.
+       */
+      if (unresolvedResources.length > 0) {
+        const first = unresolvedResources[0];
+        return {
+          ok: false,
+          readiness,
+          blockers: readiness.blocking,
+          summary:
+            `Refusing to build: ${unresolvedResources.length} resource(s) do not resolve to an approved Module 3 resource type. ` +
+            `First is ${first.resource.resourceId} (${first.resource.resourceType}), which resolved ${first.resolved.status}. ` +
+            'No resource is emitted with an unapproved or absent type.',
+        };
+      }
+      context.resources = resolvedResources
+        .filter(
+          (e): e is { resource: Resource; resolved: MappedResourceType } =>
+            e.resolved.status === 'MAPPED',
+        )
+        .map(({ resource, resolved }) => buildResource(resource, resolved.module3ResourceType));
+    }
   if (emittedCollections.includes('existingBlocks')) {
     context.existing_blocks = snapshot.occupancies
       .filter((occupancy) => occupancy.corridorId === corridorId)

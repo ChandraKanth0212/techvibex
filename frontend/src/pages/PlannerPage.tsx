@@ -22,6 +22,7 @@ import {
   useBlockRequests,
   useGoodsForecasts,
   useAIRecommendations,
+  useResourceTypeMappings,
 } from '@/hooks';
 import type { Department } from '@/types/asset';
 import type { MaintenanceTask } from '@/types/maintenance';
@@ -65,6 +66,7 @@ export const PlannerPage: React.FC = () => {
   const { data: blockRequests } = useBlockRequests();
   const { data: goodsForecasts } = useGoodsForecasts();
   const { data: recommendations } = useAIRecommendations();
+  const { data: resourceTypeMappings } = useResourceTypeMappings();
   const { scope, setHorizon, selectCorridor, identity: scopeIdentity } =
     usePlannerScope(corridors ?? []);
 
@@ -74,6 +76,11 @@ export const PlannerPage: React.FC = () => {
    * The exact snapshot handed to the readiness gate. `occupancies` is empty
    * because Module 4 ships no possession records yet — that is stated as empty
    * rather than back-filled from integrated blocks or corridor windows.
+   *
+   * `resourceTypeMappings` is the correspondence a human has actually approved,
+   * supplied through the snapshot's own channel. It is empty until someone approves
+   * one, and is never defaulted from the resource list: an approval that did not
+   * happen has to stay visible as an unresolved blocker.
    */
   const module4Snapshot = useMemo<Module4ReadinessSnapshot>(
     () => ({
@@ -87,6 +94,7 @@ export const PlannerPage: React.FC = () => {
       integratedBlocks: blocks ?? [],
       occupancies: [],
       recommendations: recommendations ?? [],
+      resourceTypeMappings: resourceTypeMappings ?? [],
       scope,
     }),
     [
@@ -97,6 +105,7 @@ export const PlannerPage: React.FC = () => {
       corridors,
       blocks,
       recommendations,
+      resourceTypeMappings,
       scope,
     ],
   );

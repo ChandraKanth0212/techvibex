@@ -8,3 +8,4 @@ export * from './usePlannerScope';
 export * from './useTimetable';
 export * from './useAI';
 export * from './useAudit';
+export * from './useResourceTypeMappings';

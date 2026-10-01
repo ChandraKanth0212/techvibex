@@ -70,6 +70,24 @@ export interface PriorityConfirmationInput {
   readonly recommendationId?: string;
 }
 
+/**
+ * Who is performing a confirmation.
+ *
+ * Both fields are REQUIRED and have no defaults, deliberately. The store's other
+ * mutators default to `'DEMO_USER'`/`'PLANNING_OFFICER'`, which is acceptable for
+ * a status flip and not acceptable here: `confirmedBy` is the name a person is on
+ * record as having made a scheduling commitment, and a default would let an
+ * unowned decision be recorded as though someone owned it — the one outcome
+ * `confirmTaskPriority` throws to prevent.
+ *
+ * `userId` is what gets recorded as `confirmedBy`; `userRole` is the role the
+ * same person acted in, carried to the audit event.
+ */
+export interface PriorityConfirmationActor {
+  readonly userId: string;
+  readonly userRole: string;
+}
+
 export interface MaintenanceTask {
   taskId: string;
   assetId: string;
