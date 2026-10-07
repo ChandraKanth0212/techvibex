@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AIRecommendation",
+  "description": "Canonical repository-level contract for Module 2 AI recommendation outputs consumed by downstream handlers.",
+  "type": "object",
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "Corresponding MaintenanceTask ID"
+    },
+    "factors": {
+      "type": "object",
+      "description": "Individual factor score breakdown",
+      "properties": {
+        "criticality_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "urgency_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "defect_severity_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "safety_impact_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "failure_risk_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "overdue_factor": { "type": "number", "minimum": 0.0 },
+        "train_exposure_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "operational_impact_score": { "type": "number", "minimum": 0.0, "maximum": 100.0 }
+      },
+      "required": [
+        "criticality_score",
+        "urgency_score",
+        "defect_severity_score",
+        "safety_impact_score",
+        "failure_risk_score",
+        "overdue_factor",
+        "train_exposure_score",
+        "operational_impact_score"
+      ]
+    },
+    "priority_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0,
+      "description": "Composite priority score [0-100]"
+    },
+    "priority_level": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+      "description": "Categorical priority level"
+    },
+    "risk_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0,
+      "description": "Risk score = Failure Prob x Consequence"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["EXTREME", "HIGH", "MODERATE", "LOW"],
+      "description": "Categorical risk level"
+    },
+    "recommended_action": {
+      "type": "string",
+      "description": "Action recommendation for controllers/optimizers"
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Machine-parseable justification codes"
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Human-readable plain English summary explanation"
+    },
+    "integration_candidate": {
+      "type": "boolean",
+      "default": false,
+      "description": "Flag indicating potential block coordination"
+    },
+    "integration_group_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Group ID if integration candidate identified"
+    },
+    "integration_reason": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Explanation for integration candidate"
+    },
+    "model_version": {
+      "type": "string",
+      "default": "1.0.0-prototype"
+    },
+    "scoring_version": {
+      "type": "string",
+      "default": "2026.1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "request_id",
+    "factors",
+    "priority_score",
+    "priority_level",
+    "risk_score",
+    "risk_level",
+    "recommended_action",
+    "reason_codes",
+    "explanation"
+  ]
+}
