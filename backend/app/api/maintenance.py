@@ -48,7 +48,16 @@ async def create_maintenance_task(
     db: AsyncSession = Depends(get_db)
 ):
     # Perform JSON Schema validation using contract
-    valid, msg = validation_service.validate_payload("maintenance-task", payload.model_dump(by_alias=True, mode="json"))
+    # id is server-generated and must not be required from the client.
+    # None-valued optional fields are omitted: the contract schema has no
+    # "null" type for them and they are not required from the caller.
+    task_payload = payload.model_dump(by_alias=True, mode="json")
+    task_payload = {k: v for k, v in task_payload.items() if v is not None}
+    valid, msg = validation_service.validate_payload(
+        "maintenance-task",
+        task_payload,
+        server_generated_required=["id"],
+    )
     if not valid:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg)
 

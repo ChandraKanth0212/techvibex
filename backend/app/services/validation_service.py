@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 import jsonschema
 from fastapi import HTTPException, status
 
@@ -26,10 +26,15 @@ class DataValidationService:
                     except Exception:
                         pass
 
-    def validate_payload(self, entity_type: str, payload: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_payload(self, entity_type: str, payload: Dict[str, Any], server_generated_required: Optional[List[str]] = None) -> Tuple[bool, str]:
         schema = self.schemas.get(entity_type)
         if not schema:
             return True, ""  # If schema file not found, fall back to Pydantic validation
+
+        # Server-generated fields (e.g. id) are not required from the client at
+        # create time but remain required in the canonical (read/output) schema.
+        if server_generated_required:
+            schema = {**schema, "required": [f for f in schema.get("required", []) if f not in server_generated_required]}
 
         try:
             jsonschema.validate(instance=payload, schema=schema)
